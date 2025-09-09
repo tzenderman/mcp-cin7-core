@@ -1,0 +1,4 @@
+*.pyc
+.venv/
+.env
+/src/mcp_cin7_core.egg-info

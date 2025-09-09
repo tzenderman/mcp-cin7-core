@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-cin7-core"
+version = "0.1.0"
+description = "MCP server to access Cin7 Core (DEAR) API"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Your Name" }]
+license = { text = "MIT" }
+
+# We keep runtime dependencies in requirements.txt per user request.
+dependencies = []
+
+[project.scripts]
+mcp-cin7-core = "mcp_cin7_core.server:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
