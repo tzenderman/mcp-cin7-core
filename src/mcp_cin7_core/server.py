@@ -107,6 +107,138 @@ async def cin7_products(
         await client.aclose()
 
 
+@server.tool()
+async def cin7_get_product(
+    product_id: int | None = None,
+    sku: str | None = None,
+) -> Dict[str, Any]:
+    """Get a single product by ID or SKU.
+
+    Returns the first matching product object.
+    """
+    logger.info(
+        "Tool call: cin7_get_product(product_id=%s, sku=%s)",
+        product_id,
+        sku,
+    )
+    client = Cin7Client.from_env()
+    try:
+        result = await client.get_product(product_id=product_id, sku=sku)
+        logger.info("Tool result: cin7_get_product -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+@server.tool()
+async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Update a Cin7 Core product via PUT Product.
+
+    Provide the JSON payload as defined by Cin7 Core API. This tool forwards
+    the payload to PUT Product and returns the API response.
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/product
+    """
+    logger.info("Tool call: cin7_update_product(payload=%s)", _truncate(str(payload)))
+    client = Cin7Client.from_env()
+    try:
+        result = await client.update_product(payload)
+        logger.info("Tool result: cin7_update_product -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+@server.tool()
+async def cin7_product_template(
+    product_id: int | None = None,
+    sku: str | None = None,
+    include_defaults: bool = True,
+) -> Dict[str, Any]:
+    """Return a Cin7 Core Product payload template.
+
+    - If `product_id` or `sku` is provided, fetch that product and return an
+      editable template preserving field structure (helpful for PUT updates).
+    - Otherwise, return a broad template with common fields and placeholders.
+    """
+    logger.info(
+        "Tool call: cin7_product_template(product_id=%s, sku=%s, include_defaults=%s)",
+        product_id,
+        sku,
+        include_defaults,
+    )
+
+    if product_id is not None or sku is not None:
+        client = Cin7Client.from_env()
+        try:
+            product = await client.get_product(product_id=product_id, sku=sku)
+            # Return a shallow copy so callers can edit safely.
+            logger.info(
+                "Tool result: cin7_product_template (from existing) -> %s",
+                _truncate(str(product)),
+            )
+            return dict(product) if isinstance(product, dict) else {"result": product}
+        finally:
+            await client.aclose()
+
+    template: Dict[str, Any] = {
+        # Identity
+        "ID": 0,
+        "SKU": "",
+        "Name": "",
+        # Classification
+        "Category": "",
+        "Brand": "",
+        "Type": "Stock",
+        "CostingMethod": "FIFO",
+        # Stock & dimensions
+        "Length": 0.0,
+        "Width": 0.0,
+        "Height": 0.0,
+        "Weight": 0.0,
+        "UOM": "Item",
+        # Visibility & status
+        "Status": "Active",
+        # Descriptions
+        "Description": "",
+        "ShortDescription": "",
+        # Codes
+        "Barcode": "",
+        "HSCode": "",
+        "CountryOfOrigin": "",
+        # Reordering
+        "MinimumBeforeReorder": None,
+        "ReorderQuantity": None,
+        # Pricing examples (expand tiers as needed)
+        "PriceTier1": None,
+        "PurchasePrice": None,
+        # Tax
+        "TaxRules": {
+            "PurchaseTaxRule": "",
+            "SaleTaxRule": "",
+        },
+        # Misc
+        "InternalNote": "",
+        "ProductTags": [],
+        "AdditionalAttributes": {},
+        # Media (example structure if supported)
+        "Images": [],
+    }
+    if not include_defaults:
+        # Remove defaulted numeric/enum fields if caller prefers sparse output
+        for key in [
+            "Type",
+            "CostingMethod",
+            "UOM",
+            "Status",
+            "Length",
+            "Width",
+            "Height",
+            "Weight",
+        ]:
+            template.pop(key, None)
+
+    logger.info("Tool result: cin7_product_template -> %s", _truncate(str(template)))
+    return template
+
 def main() -> None:
     """Entrypoint for MCP server (stdio)."""
     server.run()

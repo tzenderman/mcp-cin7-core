@@ -205,3 +205,86 @@ class Cin7Client:
         )
 
 
+    async def get_product(
+        self,
+        *,
+        product_id: Optional[int] = None,
+        sku: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch a single product by ID or SKU.
+
+        Maps to GET Product endpoint with filters. If multiple products are
+        returned (e.g., by SKU), the first item is returned.
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/product/product
+        """
+        if not product_id and not sku:
+            raise Cin7ClientError("get_product requires product_id or sku")
+
+        params: Dict[str, Any] = {}
+        if product_id is not None:
+            params["ID"] = product_id
+        if sku is not None:
+            params["SKU"] = sku
+
+        response = await self.client.get("Product", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            products = data.get("Products")
+            if isinstance(products, list) and products:
+                return products[0]
+            # Some responses might directly return the object; fall back to data
+            if data:
+                return data
+            raise Cin7ClientError("Product not found")
+
+        raise Cin7ClientError(
+            f"Product get error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def update_product(self, product: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a Product via PUT Product.
+
+        Provide the full product payload as required by Cin7 Core. Typically
+        includes the product ID along with updated fields.
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/product/product
+        """
+        response = await self.client.put("Product", json=product)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code in (200, 204):
+            return data if isinstance(data, dict) else {"result": data}
+
+        raise Cin7ClientError(
+            f"Product update error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def save_product(self, product: Dict[str, Any]) -> Dict[str, Any]:
+        """Create or update a Product.
+
+        This is a pass-through to the Cin7 Core "Product" endpoint that accepts a
+        JSON payload per the API. Use it to create or update product data.
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/product/product
+        """
+        response = await self.client.post("Product", json=product)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code in (200, 201):
+            return data if isinstance(data, dict) else {"result": data}
+
+        raise Cin7ClientError(
+            f"Product save error: {response.status_code} {response.text[:200]}"
+        )
+
