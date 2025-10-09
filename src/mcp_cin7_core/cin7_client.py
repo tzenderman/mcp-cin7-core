@@ -288,3 +288,139 @@ class Cin7Client:
             f"Product save error: {response.status_code} {response.text[:200]}"
         )
 
+    async def list_suppliers(
+        self,
+        *,
+        page: int = 1,
+        limit: int = 100,
+        name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List suppliers with pagination and optional filters.
+
+        Maps to GET Supplier endpoint.
+        Common params per docs: Page, Limit, Name.
+        Docs: https://dearinventory.docs.apiary.io/#reference/supplier/supplier/get
+        """
+        params: Dict[str, Any] = {"Page": page, "Limit": limit}
+        if name:
+            params["Name"] = name
+        response = await self.client.get("Supplier", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+        if response.status_code == 200:
+            return data if isinstance(data, dict) else {"result": data}
+        raise Cin7ClientError(
+            f"Supplier list error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def get_supplier(
+        self,
+        *,
+        supplier_id: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch a single supplier by ID or Name.
+
+        Maps to GET Supplier endpoint with filters. If multiple suppliers are
+        returned (e.g., by Name), the first item is returned.
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/supplier/supplier/get
+        """
+        if not supplier_id and not name:
+            raise Cin7ClientError("get_supplier requires supplier_id or name")
+
+        params: Dict[str, Any] = {}
+        if supplier_id is not None:
+            params["ID"] = supplier_id
+        if name is not None:
+            params["Name"] = name
+
+        response = await self.client.get("Supplier", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            suppliers = data.get("SupplierList")
+            if isinstance(suppliers, list) and suppliers:
+                return suppliers[0]
+            # Some responses might directly return the object; fall back to data
+            if data:
+                return data
+            raise Cin7ClientError("Supplier not found")
+
+        raise Cin7ClientError(
+            f"Supplier get error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def save_supplier(self, supplier: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new Supplier via POST Supplier.
+
+        Provide the full supplier payload as required by Cin7 Core.
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/supplier/supplier/post
+        """
+        response = await self.client.post("Supplier", json=supplier)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code in (200, 201):
+            return data if isinstance(data, dict) else {"result": data}
+
+        raise Cin7ClientError(
+            f"Supplier save error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def update_supplier(self, supplier: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a Supplier via PUT Supplier.
+
+        Provide the full supplier payload as required by Cin7 Core. Typically
+        includes the supplier ID along with updated fields.
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/supplier/supplier/put
+        """
+        response = await self.client.put("Supplier", json=supplier)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code in (200, 204):
+            return data if isinstance(data, dict) else {"result": data}
+
+        raise Cin7ClientError(
+            f"Supplier update error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def list_sales(
+        self,
+        *,
+        page: int = 1,
+        limit: int = 100,
+        search: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List sales with pagination and optional search filter.
+
+        Maps to GET Sale/List endpoint.
+        Common params per docs: Page, Limit, Search.
+        Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale-list/get
+        """
+        params: Dict[str, Any] = {"Page": page, "Limit": limit}
+        if search:
+            params["Search"] = search
+        response = await self.client.get("Sale/List", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+        if response.status_code == 200:
+            return data if isinstance(data, dict) else {"result": data}
+        raise Cin7ClientError(
+            f"Sale list error: {response.status_code} {response.text[:200]}"
+        )
+
