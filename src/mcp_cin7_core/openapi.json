@@ -268,9 +268,9 @@
     },
     "cin7_product_template": {
       "summary": "Get product template (optionally seeded from an existing product)",
-      "description": "IMPORTANT: Always call this endpoint BEFORE updating a product. It returns the complete current product object that you must modify and send to cin7_update_product. When updating, provide product_id or sku to get the existing product as a template.",
+      "description": "IMPORTANT: Always call this endpoint BEFORE updating a product. It returns the complete current product object that you must modify and send to cin7_update_product. When updating a product, provide the 'sku' parameter (preferred) to fetch the existing product. Do NOT use example values - use the actual SKU of the product being updated.",
       "rest": { "method": "GET", "path": "/product/template" },
-      "params": { "product_id": "integer", "sku": "string", "include_defaults": "boolean" }
+      "params": { "sku": "string (REQUIRED for updates - use actual product SKU)", "product_id": "integer (optional)", "include_defaults": "boolean" }
     },
     "cin7_create_product": {
       "summary": "Create product",
@@ -304,14 +304,15 @@
       },
       "examples": {
         "correct_update_workflow": {
-          "description": "Correct workflow to update a product price",
+          "description": "Correct workflow to update a product price. CRITICAL: Use the actual product SKU, not example values!",
           "steps": [
             { 
               "step": 1,
-              "action": "Fetch current product",
+              "action": "Fetch current product using its SKU",
               "method": "GET", 
               "path": "/product/template", 
-              "query": { "sku": "JPAS400" },
+              "query": { "sku": "<actual_product_sku>" },
+              "note": "Replace <actual_product_sku> with the real SKU like 'JPAS400'",
               "response_example": { 
                 "ID": "bf819311-a7b6-4eb8-bf8f-33744650bdb8",
                 "SKU": "JPAS400",

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import logging
+import json
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
@@ -94,6 +96,25 @@ async def log_requests(request: Request, call_next):
 @app.get("/health")
 async def health(_: None = Depends(require_bearer_auth)) -> Dict[str, Any]:
     return {"ok": True}
+
+
+@app.get("/openapi.json")
+async def get_openapi_schema() -> Dict[str, Any]:
+    """Serve the OpenAPI schema for Custom GPT Actions.
+    
+    This endpoint does NOT require authentication so that Custom GPTs can
+    fetch the schema to understand available endpoints and workflows.
+    """
+    logger.info("OpenAPI schema requested")
+    openapi_file = Path(__file__).parent / "openapi.json"
+    try:
+        with open(openapi_file, 'r') as f:
+            schema = json.load(f)
+        logger.info("Serving OpenAPI schema with %d paths", len(schema.get("paths", {})))
+        return schema
+    except Exception as e:
+        logger.error("Failed to load openapi.json: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to load OpenAPI schema: {str(e)}")
 
 
 @app.get("/me")
