@@ -1,0 +1,328 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "mcp-cin7-core", "version": "0.1.0" },
+  "servers": [
+    { "url": "https://mcp-cin7-core.onrender.com", "description": "Render prod" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "apiKeyAuth": { "type": "apiKey", "in": "header", "name": "Authorization", "description": "Bearer <token>" }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": { "ok": { "type": "boolean" } },
+        "required": ["ok"]
+      },
+      "MeResponse": {
+        "type": "object",
+        "properties": {
+          "AccountID": { "type": "string" },
+          "Company": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "ProductsResponse": {
+        "type": "object",
+        "properties": {
+          "Products": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "result": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        },
+        "additionalProperties": true
+      },
+      "ProductResponse": {
+        "type": "object",
+        "properties": { "result": { "type": "object", "additionalProperties": true } },
+        "additionalProperties": true
+      },
+      "SuppliersResponse": {
+        "type": "object",
+        "properties": {
+          "Suppliers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "result": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        },
+        "additionalProperties": true
+      },
+      "SalesResponse": {
+        "type": "object",
+        "properties": {
+          "SaleList": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "result": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        },
+        "additionalProperties": true
+      },
+      "ProductPayload": {
+        "type": "object",
+        "properties": { "SKU": { "type": "string" }, "Name": { "type": "string" } },
+        "required": ["SKU", "Name"],
+        "additionalProperties": true
+      },
+      "SupplierPayload": {
+        "type": "object",
+        "properties": { "Name": { "type": "string" } },
+        "required": ["Name"],
+        "additionalProperties": true
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } },
+        "required": ["error"]
+      }
+    }
+  },
+  "security": [{ "apiKeyAuth": [] }],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_get",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } } } }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "Me",
+        "operationId": "me_get",
+        "responses": {
+          "200": { "description": "Account/user info", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MeResponse" } } } }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "summary": "List products",
+        "operationId": "products_list",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1 } },
+          { "name": "name", "in": "query", "schema": { "type": "string" } },
+          { "name": "sku", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Products", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductsResponse" } } } }
+        }
+      }
+    },
+    "/product": {
+      "get": {
+        "summary": "Get product",
+        "operationId": "product_get",
+        "parameters": [
+          { "name": "product_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "sku", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Product", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductResponse" } } } }
+        }
+      },
+      "post": {
+        "summary": "Create product",
+        "operationId": "product_create",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductPayload" } } } },
+        "responses": {
+          "200": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductResponse" } } } }
+        }
+      },
+      "put": {
+        "summary": "Update product",
+        "operationId": "product_update",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductPayload" } } } },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductResponse" } } } }
+        }
+      }
+    },
+    "/product/template": {
+      "get": {
+        "summary": "Product template",
+        "operationId": "product_template_get",
+        "parameters": [
+          { "name": "product_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "sku", "in": "query", "schema": { "type": "string" } },
+          { "name": "include_defaults", "in": "query", "schema": { "type": "boolean" }, "description": "Include default-valued fields" }
+        ],
+        "responses": {
+          "200": { "description": "Template", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+        }
+      }
+    },
+    "/suppliers": {
+      "get": {
+        "summary": "List suppliers",
+        "operationId": "suppliers_list",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1 } },
+          { "name": "name", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Suppliers", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuppliersResponse" } } } }
+        }
+      }
+    },
+    "/supplier": {
+      "get": {
+        "summary": "Get supplier",
+        "operationId": "supplier_get",
+        "parameters": [
+          { "name": "supplier_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "name", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Supplier", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+        }
+      },
+      "post": {
+        "summary": "Create supplier",
+        "operationId": "supplier_create",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierPayload" } } } },
+        "responses": {
+          "200": { "description": "Created", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+        }
+      },
+      "put": {
+        "summary": "Update supplier",
+        "operationId": "supplier_update",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierPayload" } } } },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+        }
+      }
+    },
+    "/supplier/template": {
+      "get": {
+        "summary": "Supplier template",
+        "operationId": "supplier_template_get",
+        "parameters": [
+          { "name": "supplier_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "name", "in": "query", "schema": { "type": "string" } },
+          { "name": "include_defaults", "in": "query", "schema": { "type": "boolean" }, "description": "Include default-valued fields" }
+        ],
+        "responses": {
+          "200": { "description": "Template", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+        }
+      }
+    },
+    "/sales": {
+      "get": {
+        "summary": "List sales",
+        "operationId": "sales_list",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1 } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Sales", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SalesResponse" } } } }
+        }
+      }
+    }
+  },
+  "x-mcp-tools": {
+    "cin7_status": { "summary": "Health check", "rest": { "method": "GET", "path": "/health" } },
+    "cin7_me": { "summary": "Account info", "rest": { "method": "GET", "path": "/me" } },
+    "cin7_products": {
+      "summary": "List products",
+      "rest": { "method": "GET", "path": "/products" },
+      "params": { "page": "integer", "limit": "integer", "name": "string", "sku": "string" }
+    },
+    "cin7_get_product": {
+      "summary": "Get product by ID or SKU",
+      "rest": { "method": "GET", "path": "/product" },
+      "params": { "product_id": "integer", "sku": "string" }
+    },
+    "cin7_product_template": {
+      "summary": "Get product template (optionally seeded from an existing product)",
+      "rest": { "method": "GET", "path": "/product/template" },
+      "params": { "product_id": "integer", "sku": "string", "include_defaults": "boolean" }
+    },
+    "cin7_create_product": {
+      "summary": "Create product",
+      "rest": { "method": "POST", "path": "/product" },
+      "payload": { "required": ["SKU", "Name"], "properties": { "SKU": "string", "Name": "string" } },
+      "examples": {
+        "create_minimal": {
+          "request": { "method": "POST", "path": "/product", "body": { "SKU": "SKU-123", "Name": "Widget" } }
+        }
+      }
+    },
+    "cin7_update_product": {
+      "summary": "Update product",
+      "rest": { "method": "PUT", "path": "/product" },
+      "payload": { "required": ["ID"], "properties": { "ID": "integer", "PriceTier1": "number", "PurchasePrice": "number" } },
+      "examples": {
+        "update_price": {
+          "request": { "method": "PUT", "path": "/product", "body": { "ID": 12345, "PriceTier1": 19.99 } }
+        },
+        "template_flow": {
+          "steps": [
+            { "method": "GET", "path": "/product/template", "query": { "product_id": 12345 } },
+            { "method": "PUT", "path": "/product", "body": { "...": "fill from template" } }
+          ]
+        }
+      }
+    },
+    "cin7_suppliers": {
+      "summary": "List suppliers",
+      "rest": { "method": "GET", "path": "/suppliers" },
+      "params": { "page": "integer", "limit": "integer", "name": "string" }
+    },
+    "cin7_get_supplier": {
+      "summary": "Get supplier by ID or name",
+      "rest": { "method": "GET", "path": "/supplier" },
+      "params": { "supplier_id": "string", "name": "string" }
+    },
+    "cin7_supplier_template": {
+      "summary": "Get supplier template (optionally seeded from an existing supplier)",
+      "rest": { "method": "GET", "path": "/supplier/template" },
+      "params": { "supplier_id": "string", "name": "string", "include_defaults": "boolean" }
+    },
+    "cin7_create_supplier": {
+      "summary": "Create supplier",
+      "rest": { "method": "POST", "path": "/supplier" },
+      "payload": { "required": ["Name"], "properties": { "Name": "string" } },
+      "examples": {
+        "create_minimal": {
+          "request": { "method": "POST", "path": "/supplier", "body": { "Name": "Acme Co" } }
+        }
+      }
+    },
+    "cin7_update_supplier": {
+      "summary": "Update supplier",
+      "rest": { "method": "PUT", "path": "/supplier" },
+      "payload": { "required": ["ID"], "properties": { "ID": "string", "Name": "string" } }
+    },
+    "cin7_sales": {
+      "summary": "List sales",
+      "rest": { "method": "GET", "path": "/sales" },
+      "params": { "page": "integer", "limit": "integer", "search": "string" }
+    },
+    "cin7_products_snapshot_start": {
+      "summary": "Start products snapshot",
+      "rest": { "method": "POST", "path": "/products/snapshot/start" },
+      "payload": { "properties": { "page": "integer", "limit": "integer", "name": "string", "sku": "string", "fields": "string[]" } },
+      "examples": {
+        "start": {
+          "request": { "method": "POST", "path": "/products/snapshot/start", "body": { "page": 1, "limit": 100, "fields": ["SKU","Name","PriceTier1"] } }
+        }
+      }
+    },
+    "cin7_products_snapshot_chunk": {
+      "summary": "Get products snapshot chunk",
+      "rest": { "method": "GET", "path": "/products/snapshot/chunk" },
+      "params": { "snapshot_id": "string", "offset": "integer", "limit": "integer" }
+    },
+    "cin7_products_snapshot_status": {
+      "summary": "Products snapshot status",
+      "rest": { "method": "GET", "path": "/products/snapshot/status" },
+      "params": { "snapshot_id": "string" }
+    },
+    "cin7_products_snapshot_close": {
+      "summary": "Close products snapshot",
+      "rest": { "method": "POST", "path": "/products/snapshot/close" },
+      "payload": { "required": ["snapshot_id"], "properties": { "snapshot_id": "string" } }
+    }
+  }
+}

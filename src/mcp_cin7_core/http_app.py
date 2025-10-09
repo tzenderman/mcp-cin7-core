@@ -7,6 +7,12 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
 from .cin7_client import Cin7Client, Cin7ClientError
+from .server import (
+    cin7_products_snapshot_start,
+    cin7_products_snapshot_chunk,
+    cin7_products_snapshot_status,
+    cin7_products_snapshot_close,
+)
 
 
 logger = logging.getLogger("mcp_cin7_core.http_app")
@@ -94,6 +100,88 @@ async def get_product(
         await client.aclose()
 
 
+@app.get("/product/template")
+async def product_template(
+    product_id: Optional[int] = None,
+    sku: Optional[str] = None,
+    include_defaults: bool = True,
+    _: Dict[str, Any] = Depends(require_bearer_auth),
+) -> Dict[str, Any]:
+    """Return a Product payload template for REST clients.
+
+    - If `product_id` or `sku` is provided, fetch that product and return it as
+      an editable template suitable for PUT updates.
+    - Otherwise, return a broad template with common fields and placeholders
+      suitable for creating new products via POST /product.
+    """
+    if product_id is not None or sku is not None:
+        client = Cin7Client.from_env()
+        try:
+            return await client.get_product(product_id=product_id, sku=sku)
+        finally:
+            await client.aclose()
+
+    template: Dict[str, Any] = {
+        # Identity
+        "ID": 0,
+        "SKU": "",
+        "Name": "",
+        # Classification
+        "Category": "",
+        "Brand": "",
+        "Type": "Stock",
+        "CostingMethod": "FIFO",
+        # Stock & dimensions
+        "Length": 0.0,
+        "Width": 0.0,
+        "Height": 0.0,
+        "Weight": 0.0,
+        "UOM": "Item",
+        # Visibility & status
+        "Status": "Active",
+        # Descriptions
+        "Description": "",
+        "ShortDescription": "",
+        # Codes
+        "Barcode": "",
+        "HSCode": "",
+        "CountryOfOrigin": "",
+        # Reordering
+        "MinimumBeforeReorder": None,
+        "ReorderQuantity": None,
+        # Pricing examples (expand tiers as needed)
+        "PriceTier1": None,
+        "PurchasePrice": None,
+        # Tax
+        "TaxRules": {
+            "PurchaseTaxRule": "",
+            "SaleTaxRule": "",
+        },
+        # Misc
+        "InternalNote": "",
+        "ProductTags": [],
+        "AdditionalAttributes": {},
+        # Media (example structure if supported)
+        "Images": [],
+    }
+
+    if not include_defaults:
+        # Remove defaulted numeric/enum fields if caller prefers sparse output
+        for key in [
+            "Type",
+            "CostingMethod",
+            "UOM",
+            "Status",
+            "Length",
+            "Width",
+            "Height",
+            "Weight",
+        ]:
+            template.pop(key, None)
+
+    return template
+
+
 @app.post("/product")
 async def create_product(payload: Dict[str, Any], _: Dict[str, Any] = Depends(require_bearer_auth)) -> Dict[str, Any]:
     client = Cin7Client.from_env()
@@ -139,6 +227,69 @@ async def get_supplier(
         await client.aclose()
 
 
+@app.get("/supplier/template")
+async def supplier_template(
+    supplier_id: Optional[str] = None,
+    name: Optional[str] = None,
+    include_defaults: bool = True,
+    _: Dict[str, Any] = Depends(require_bearer_auth),
+) -> Dict[str, Any]:
+    """Return a Supplier payload template for REST clients.
+
+    - If `supplier_id` or `name` is provided, fetch that supplier and return it
+      as an editable template suitable for PUT updates.
+    - Otherwise, return a broad template with common fields and placeholders
+      suitable for creating new suppliers via POST /supplier.
+    """
+    if supplier_id is not None or name is not None:
+        client = Cin7Client.from_env()
+        try:
+            return await client.get_supplier(supplier_id=supplier_id, name=name)
+        finally:
+            await client.aclose()
+
+    template: Dict[str, Any] = {
+        # Identity
+        "ID": "",
+        "Name": "",
+        # Contact info
+        "Contact": "",
+        "Phone": "",
+        "Fax": "",
+        "MobilePhone": "",
+        "Email": "",
+        "Website": "",
+        # Address
+        "SupplierAddress": [
+            {
+                "Line1": "",
+                "Line2": "",
+                "City": "",
+                "State": "",
+                "Postcode": "",
+                "Country": "",
+            }
+        ],
+        # Banking
+        "BankName": "",
+        "BankBranch": "",
+        "BankAccount": "",
+        "BankCode": "",
+        # Tax & payment
+        "TaxNumber": "",
+        "PaymentTerm": "",
+        "SupplierDefaultTaxRule": "",
+        # Other
+        "Comment": "",
+        "Currency": "",
+    }
+
+    if not include_defaults:
+        # Remove empty/defaulted fields if caller prefers sparse output
+        template = {k: v for k, v in template.items() if v not in ("", [], {})}
+
+    return template
+
 @app.post("/supplier")
 async def create_supplier(payload: Dict[str, Any], _: Dict[str, Any] = Depends(require_bearer_auth)) -> Dict[str, Any]:
     client = Cin7Client.from_env()
@@ -169,6 +320,56 @@ async def list_sales(
         return await client.list_sales(page=page, limit=limit, search=search)
     finally:
         await client.aclose()
+
+
+@app.post("/products/snapshot/start")
+async def products_snapshot_start(
+    payload: Dict[str, Any],
+    _: Dict[str, Any] = Depends(require_bearer_auth),
+) -> Dict[str, Any]:
+    """Start a background snapshot build of products.
+
+    Body: { page?, limit?, name?, sku?, fields?[] }
+    """
+    page = int(payload.get("page", 1))
+    limit = int(payload.get("limit", 100))
+    name = payload.get("name")
+    sku = payload.get("sku")
+    fields = payload.get("fields")
+    return await cin7_products_snapshot_start(page=page, limit=limit, name=name, sku=sku, fields=fields)
+
+
+@app.get("/products/snapshot/chunk")
+async def products_snapshot_chunk(
+    snapshot_id: str,
+    offset: int = 0,
+    limit: int = 100,
+    _: Dict[str, Any] = Depends(require_bearer_auth),
+) -> Dict[str, Any]:
+    """Fetch a slice of items from a built or building snapshot."""
+    return await cin7_products_snapshot_chunk(snapshot_id=snapshot_id, offset=offset, limit=limit)
+
+
+@app.get("/products/snapshot/status")
+async def products_snapshot_status(
+    snapshot_id: str,
+    _: Dict[str, Any] = Depends(require_bearer_auth),
+) -> Dict[str, Any]:
+    """Get status and metadata for a running or completed snapshot."""
+    return await cin7_products_snapshot_status(snapshot_id)
+
+
+@app.post("/products/snapshot/close")
+async def products_snapshot_close(
+    payload: Dict[str, Any],
+    _: Dict[str, Any] = Depends(require_bearer_auth),
+) -> Dict[str, Any]:
+    """Close and clean up a snapshot, cancelling work if still running.
+
+    Body: { snapshot_id }
+    """
+    snapshot_id = str(payload.get("snapshot_id"))
+    return await cin7_products_snapshot_close(snapshot_id)
 
 
 @app.exception_handler(Cin7ClientError)
