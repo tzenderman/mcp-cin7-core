@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
+from .cin7_client import Cin7Client, Cin7ClientError
 
 
 logger = logging.getLogger("mcp_cin7_core.http_app")
