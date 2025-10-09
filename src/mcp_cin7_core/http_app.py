@@ -65,6 +65,32 @@ async def require_bearer_auth(request: Request) -> None:
 app = FastAPI(title="mcp-cin7-core", version="0.1.0")
 
 
+# Middleware to log ALL incoming requests
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info("=" * 80)
+    logger.info("INCOMING REQUEST: %s %s", request.method, request.url.path)
+    logger.info("Query params: %s", dict(request.query_params))
+    
+    # Log headers (redact auth)
+    headers_to_log = {k: v for k, v in request.headers.items() if k.lower() not in ["authorization"]}
+    logger.info("Headers (auth redacted): %s", headers_to_log)
+    
+    # For POST/PUT, log body
+    if request.method in ["POST", "PUT", "PATCH"]:
+        try:
+            body = await request.body()
+            body_str = body.decode('utf-8') if body else ""
+            logger.info("Request body (length=%d): %s", len(body_str), body_str[:2000])
+        except Exception as e:
+            logger.warning("Could not read request body: %s", str(e))
+    
+    response = await call_next(request)
+    logger.info("RESPONSE: %s %s -> %d", request.method, request.url.path, response.status_code)
+    logger.info("=" * 80)
+    return response
+
+
 @app.get("/health")
 async def health(_: None = Depends(require_bearer_auth)) -> Dict[str, Any]:
     return {"ok": True}
