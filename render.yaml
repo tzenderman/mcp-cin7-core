@@ -14,7 +14,7 @@ services:
         sync: false
       - key: CIN7_API_KEY
         sync: false
-      - key: MCP_AUTH_TOKEN
+      - key: BEARER_TOKEN
         sync: false
 
 

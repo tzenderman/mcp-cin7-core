@@ -15,6 +15,13 @@ from .server import (
 )
 
 
+# Configure logging for the HTTP app
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+)
+
 logger = logging.getLogger("mcp_cin7_core.http_app")
 
 
@@ -114,10 +121,20 @@ async def product_template(
     - Otherwise, return a broad template with common fields and placeholders
       suitable for creating new products via POST /product.
     """
+    logger.info("HTTP GET /product/template called with product_id=%s, sku=%s, include_defaults=%s", 
+                product_id, sku, include_defaults)
+    
     if product_id is not None or sku is not None:
         client = Cin7Client.from_env()
         try:
-            return await client.get_product(product_id=product_id, sku=sku)
+            result = await client.get_product(product_id=product_id, sku=sku)
+            logger.info("GET /product/template returning existing product: ID type=%s, keys=%s", 
+                       type(result.get("ID")) if isinstance(result, dict) else "N/A",
+                       list(result.keys()) if isinstance(result, dict) else "NOT A DICT")
+            return result
+        except Exception as e:
+            logger.error("GET /product/template failed to fetch product: %s", str(e), exc_info=True)
+            raise
         finally:
             await client.aclose()
 
@@ -184,18 +201,36 @@ async def product_template(
 
 @app.post("/product")
 async def create_product(payload: Dict[str, Any], _: Dict[str, Any] = Depends(require_bearer_auth)) -> Dict[str, Any]:
+    logger.info("HTTP POST /product received payload: %s", payload)
+    logger.info("Payload type: %s, keys: %s", type(payload), list(payload.keys()) if isinstance(payload, dict) else "NOT A DICT")
+    
     client = Cin7Client.from_env()
     try:
-        return await client.save_product(payload)
+        result = await client.save_product(payload)
+        logger.info("HTTP POST /product successful, returning: %s", str(result)[:500])
+        return result
+    except Exception as e:
+        logger.error("HTTP POST /product failed with error: %s", str(e), exc_info=True)
+        raise
     finally:
         await client.aclose()
 
 
 @app.put("/product")
 async def update_product(payload: Dict[str, Any], _: Dict[str, Any] = Depends(require_bearer_auth)) -> Dict[str, Any]:
+    logger.info("HTTP PUT /product received payload: %s", payload)
+    logger.info("Payload type: %s, keys: %s", type(payload), list(payload.keys()) if isinstance(payload, dict) else "NOT A DICT")
+    if isinstance(payload, dict) and "ID" in payload:
+        logger.info("Product ID type: %s, value: %s", type(payload["ID"]), payload["ID"])
+    
     client = Cin7Client.from_env()
     try:
-        return await client.update_product(payload)
+        result = await client.update_product(payload)
+        logger.info("HTTP PUT /product successful, returning: %s", str(result)[:500])
+        return result
+    except Exception as e:
+        logger.error("HTTP PUT /product failed with error: %s", str(e), exc_info=True)
+        raise
     finally:
         await client.aclose()
 

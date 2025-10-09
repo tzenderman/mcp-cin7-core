@@ -53,7 +53,12 @@
       },
       "ProductPayload": {
         "type": "object",
-        "properties": { "SKU": { "type": "string" }, "Name": { "type": "string" } },
+        "description": "Product payload for create/update. For updates (PUT), ID is required and must match the exact type from the template. For creates (POST), omit ID or set to 0.",
+        "properties": { 
+          "ID": { "type": ["string", "integer"], "description": "Product ID - can be UUID string or integer depending on Cin7 response" },
+          "SKU": { "type": "string" }, 
+          "Name": { "type": "string" }
+        },
         "required": ["SKU", "Name"],
         "additionalProperties": true
       },
@@ -71,7 +76,7 @@
       "ProductTemplate": {
         "type": "object",
         "properties": {
-          "ID": { "type": "integer" },
+          "ID": { "type": ["string", "integer"], "description": "Product ID - preserve exact value when updating" },
           "SKU": { "type": "string" },
           "Name": { "type": "string" },
           "PriceTier1": { "type": ["number", "null"] },
@@ -263,6 +268,7 @@
     },
     "cin7_product_template": {
       "summary": "Get product template (optionally seeded from an existing product)",
+      "description": "IMPORTANT: Always call this endpoint BEFORE updating a product. It returns the complete current product object that you must modify and send to cin7_update_product. When updating, provide product_id or sku to get the existing product as a template.",
       "rest": { "method": "GET", "path": "/product/template" },
       "params": { "product_id": "integer", "sku": "string", "include_defaults": "boolean" }
     },
@@ -278,17 +284,80 @@
     },
     "cin7_update_product": {
       "summary": "Update product",
+      "description": "REQUIRED WORKFLOW for updating products: 1) Call cin7_product_template with product_id or sku to fetch the complete current product object. 2) Take the ENTIRE response from step 1 and modify ONLY the specific fields you want to update (e.g., PriceTier1). 3) Send the COMPLETE modified object as the payload to this endpoint. The Cin7 API requires the full product object, not just the changed fields.",
       "rest": { "method": "PUT", "path": "/product" },
-      "payload": { "required": ["ID"], "properties": { "ID": "integer", "PriceTier1": "number", "PurchasePrice": "number" } },
-      "examples": {
-        "update_price": {
-          "request": { "method": "PUT", "path": "/product", "body": { "ID": 12345, "PriceTier1": 19.99 } }
+      "payload": { 
+        "required": ["ID"], 
+        "properties": { 
+          "ID": "string or integer (use exact value from template response)",
+          "SKU": "string",
+          "Name": "string",
+          "PriceTier1": "number", 
+          "PurchasePrice": "number",
+          "Category": "string",
+          "Brand": "string",
+          "Type": "string",
+          "UOM": "string",
+          "Status": "string"
         },
-        "template_flow": {
+        "note": "You MUST include ALL fields from the cin7_product_template response, not just the ones being changed. Send the complete product object."
+      },
+      "examples": {
+        "correct_update_workflow": {
+          "description": "Correct workflow to update a product price",
           "steps": [
-            { "method": "GET", "path": "/product/template", "query": { "product_id": 12345 } },
-            { "method": "PUT", "path": "/product", "body": { "...": "fill from template" } }
+            { 
+              "step": 1,
+              "action": "Fetch current product",
+              "method": "GET", 
+              "path": "/product/template", 
+              "query": { "sku": "JPAS400" },
+              "response_example": { 
+                "ID": "bf819311-a7b6-4eb8-bf8f-33744650bdb8",
+                "SKU": "JPAS400",
+                "Name": "Jean Paul Student Alto Saxophone brass",
+                "PriceTier1": 599.99,
+                "Category": "Saxophones",
+                "Brand": "Jean Paul",
+                "Type": "Stock",
+                "UOM": "Item",
+                "Status": "Active",
+                "...": "all other fields from Cin7"
+              }
+            },
+            { 
+              "step": 2,
+              "action": "Modify the price in the response object",
+              "note": "Change PriceTier1 from 599.99 to 679.99 in the complete object from step 1"
+            },
+            {
+              "step": 3,
+              "action": "Send the complete modified object",
+              "method": "PUT", 
+              "path": "/product", 
+              "body_example": {
+                "ID": "bf819311-a7b6-4eb8-bf8f-33744650bdb8",
+                "SKU": "JPAS400",
+                "Name": "Jean Paul Student Alto Saxophone brass",
+                "PriceTier1": 679.99,
+                "Category": "Saxophones",
+                "Brand": "Jean Paul",
+                "Type": "Stock",
+                "UOM": "Item",
+                "Status": "Active",
+                "...": "all other fields unchanged from step 1"
+              }
+            }
           ]
+        },
+        "wrong_approach": {
+          "description": "INCORRECT - Do NOT do this",
+          "why": "Sending only changed fields will cause a 502 Bad Gateway error",
+          "wrong_request": { 
+            "method": "PUT", 
+            "path": "/product", 
+            "body": { "ID": "bf819311-a7b6-4eb8-bf8f-33744650bdb8", "PriceTier1": 679.99 }
+          }
         }
       }
     },

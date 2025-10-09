@@ -254,18 +254,35 @@ class Cin7Client:
 
         Docs: https://dearinventory.docs.apiary.io/#reference/product/product
         """
-        response = await self.client.put("Product", json=product)
+        logger.info("Cin7Client.update_product called with payload: %s", product)
+        logger.info("Payload size: %d chars, keys: %s", len(str(product)), list(product.keys()) if isinstance(product, dict) else "NOT A DICT")
+        
         try:
-            data = response.json()
-        except Exception:
-            data = {"raw": _truncate(response.text or "")}
+            response = await self.client.put("Product", json=product)
+            logger.info("Cin7 API PUT Product response status: %d", response.status_code)
+            logger.info("Cin7 API response headers: %s", dict(response.headers))
+            logger.info("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
+            
+            try:
+                data = response.json()
+            except Exception as json_error:
+                logger.error("Failed to parse Cin7 response as JSON: %s", str(json_error))
+                data = {"raw": _truncate(response.text or "")}
 
-        if response.status_code in (200, 204):
-            return data if isinstance(data, dict) else {"result": data}
+            if response.status_code in (200, 204):
+                logger.info("Product update successful, returning data")
+                return data if isinstance(data, dict) else {"result": data}
 
-        raise Cin7ClientError(
-            f"Product update error: {response.status_code} {response.text[:200]}"
-        )
+            error_msg = f"Product update error: {response.status_code} {response.text[:500]}"
+            logger.error("Product update failed: %s", error_msg)
+            logger.error("Full response text: %s", response.text)
+            raise Cin7ClientError(error_msg)
+            
+        except Cin7ClientError:
+            raise
+        except Exception as e:
+            logger.error("Unexpected error in update_product: %s", str(e), exc_info=True)
+            raise
 
     async def save_product(self, product: Dict[str, Any]) -> Dict[str, Any]:
         """Create or update a Product.
@@ -275,18 +292,35 @@ class Cin7Client:
 
         Docs: https://dearinventory.docs.apiary.io/#reference/product/product
         """
-        response = await self.client.post("Product", json=product)
+        logger.info("Cin7Client.save_product called with payload: %s", product)
+        logger.info("Payload size: %d chars, keys: %s", len(str(product)), list(product.keys()) if isinstance(product, dict) else "NOT A DICT")
+        
         try:
-            data = response.json()
-        except Exception:
-            data = {"raw": _truncate(response.text or "")}
+            response = await self.client.post("Product", json=product)
+            logger.info("Cin7 API POST Product response status: %d", response.status_code)
+            logger.info("Cin7 API response headers: %s", dict(response.headers))
+            logger.info("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
+            
+            try:
+                data = response.json()
+            except Exception as json_error:
+                logger.error("Failed to parse Cin7 response as JSON: %s", str(json_error))
+                data = {"raw": _truncate(response.text or "")}
 
-        if response.status_code in (200, 201):
-            return data if isinstance(data, dict) else {"result": data}
+            if response.status_code in (200, 201):
+                logger.info("Product save successful, returning data")
+                return data if isinstance(data, dict) else {"result": data}
 
-        raise Cin7ClientError(
-            f"Product save error: {response.status_code} {response.text[:200]}"
-        )
+            error_msg = f"Product save error: {response.status_code} {response.text[:500]}"
+            logger.error("Product save failed: %s", error_msg)
+            logger.error("Full response text: %s", response.text)
+            raise Cin7ClientError(error_msg)
+            
+        except Cin7ClientError:
+            raise
+        except Exception as e:
+            logger.error("Unexpected error in save_product: %s", str(e), exc_info=True)
+            raise
 
     async def list_suppliers(
         self,
