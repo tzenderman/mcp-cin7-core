@@ -2,5 +2,7 @@ mcp
 httpx
 python-dotenv
 pydantic
+fastapi
+uvicorn[standard]
 
 
