@@ -67,6 +67,34 @@
         "type": "object",
         "properties": { "error": { "type": "string" } },
         "required": ["error"]
+      },
+      "ProductTemplate": {
+        "type": "object",
+        "properties": {
+          "ID": { "type": "integer" },
+          "SKU": { "type": "string" },
+          "Name": { "type": "string" },
+          "PriceTier1": { "type": ["number", "null"] },
+          "PurchasePrice": { "type": ["number", "null"] }
+        },
+        "additionalProperties": true
+      },
+      "SupplierTemplate": {
+        "type": "object",
+        "properties": {
+          "ID": { "type": "string" },
+          "Name": { "type": "string" },
+          "SupplierAddress": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        },
+        "additionalProperties": true
+      },
+      "SupplierObject": {
+        "type": "object",
+        "properties": {
+          "ID": { "type": "string" },
+          "Name": { "type": "string" }
+        },
+        "additionalProperties": true
       }
     }
   },
@@ -144,7 +172,7 @@
           { "name": "include_defaults", "in": "query", "schema": { "type": "boolean" }, "description": "Include default-valued fields" }
         ],
         "responses": {
-          "200": { "description": "Template", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+          "200": { "description": "Template", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductTemplate" } } } }
         }
       }
     },
@@ -171,7 +199,7 @@
           { "name": "name", "in": "query", "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": { "description": "Supplier", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+          "200": { "description": "Supplier", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierObject" } } } }
         }
       },
       "post": {
@@ -179,7 +207,7 @@
         "operationId": "supplier_create",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierPayload" } } } },
         "responses": {
-          "200": { "description": "Created", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+          "200": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierObject" } } } }
         }
       },
       "put": {
@@ -187,7 +215,7 @@
         "operationId": "supplier_update",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierPayload" } } } },
         "responses": {
-          "200": { "description": "Updated", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierObject" } } } }
         }
       }
     },
@@ -201,7 +229,7 @@
           { "name": "include_defaults", "in": "query", "schema": { "type": "boolean" }, "description": "Include default-valued fields" }
         ],
         "responses": {
-          "200": { "description": "Template", "content": { "application/json": { "schema": { "type": "object", "additionalProperties": true } } } }
+          "200": { "description": "Template", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierTemplate" } } } }
         }
       }
     },
