@@ -8,6 +8,7 @@ from logging.handlers import RotatingFileHandler
 import asyncio
 import uuid
 import time
+import json
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -738,6 +739,70 @@ async def cin7_sales(
 
         logger.info("Tool result: cin7_sales -> %s", _truncate(str(result)))
         return result
+    finally:
+        await client.aclose()
+
+
+# ----------------------------- Product Template Resources -----------------------------
+
+@server.resource("cin7://templates/product")
+async def resource_product_template() -> str:
+    """Blank product template with all available fields and required field indicators.
+
+    Use this template to see what fields are available when creating products.
+    """
+    template = {
+        "SKU": "",  # REQUIRED: Unique product identifier
+        "Name": "",  # REQUIRED: Product title
+        "Category": "",  # REQUIRED: Product category
+        "Brand": "",
+        "Barcode": "",  # Typically 12-digit UPC
+        "Status": "Active",  # REQUIRED: Active or Inactive
+        "Type": "Stock",  # REQUIRED: Stock, Service, or Bundle
+        "UOM": "Item",  # REQUIRED: Unit of measure (Item, Case, Box, etc.)
+        "CostingMethod": "FIFO",  # REQUIRED: FIFO, LIFO, or Average
+        "DefaultLocation": "",  # REQUIRED: Default warehouse location
+        "PriceTier1": 0.0,
+        "PriceTier2": 0.0,
+        "PurchasePrice": 0.0,
+        "COGSAccount": "5000",
+        "RevenueAccount": "4000",
+        "InventoryAccount": "1401",
+        "PurchaseTaxRule": "Tax Exempt",
+        "SaleTaxRule": "Tax Exempt",
+        "Suppliers": []  # Array of supplier objects
+    }
+    return json.dumps(template, indent=2)
+
+
+@server.resource("cin7://templates/product/{product_id}")
+async def resource_product_by_id(product_id: str) -> str:
+    """Get existing product as template for updates.
+
+    Returns the current product data which can be modified and used with cin7_update_product.
+    """
+    logger.info("Resource call: resource_product_by_id(product_id=%s)", product_id)
+    client = Cin7Client.from_env()
+    try:
+        product = await client.get_product(product_id=int(product_id))
+        logger.info("Resource result: resource_product_by_id -> %s", _truncate(str(product)))
+        return json.dumps(product, indent=2)
+    finally:
+        await client.aclose()
+
+
+@server.resource("cin7://templates/product/sku/{sku}")
+async def resource_product_by_sku(sku: str) -> str:
+    """Get existing product by SKU as template for updates.
+
+    Returns the current product data which can be modified and used with cin7_update_product.
+    """
+    logger.info("Resource call: resource_product_by_sku(sku=%s)", sku)
+    client = Cin7Client.from_env()
+    try:
+        product = await client.get_product(sku=sku)
+        logger.info("Resource result: resource_product_by_sku -> %s", _truncate(str(product)))
+        return json.dumps(product, indent=2)
     finally:
         await client.aclose()
 
