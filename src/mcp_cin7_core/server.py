@@ -742,12 +742,3 @@ async def cin7_sales(
         await client.aclose()
 
 
-def main() -> None:
-    """Entrypoint for MCP server (stdio)."""
-    server.run()
-
-
-if __name__ == "__main__":
-    main()
-
-

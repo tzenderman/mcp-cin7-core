@@ -56,3 +56,14 @@ async def auth_middleware(request: Request, call_next):
 
 # Mount MCP app at root so the /mcp endpoint is accessible at /mcp
 app.mount("/", mcp_app)
+
+
+def main() -> None:
+    """Entrypoint for MCP HTTP server."""
+    import uvicorn
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+if __name__ == "__main__":
+    main()
