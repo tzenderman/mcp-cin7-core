@@ -863,3 +863,89 @@ async def resource_supplier_by_name(name: str) -> str:
         await client.aclose()
 
 
+# ----------------------------- Workflow Prompts -----------------------------
+
+@server.prompt()
+async def create_product() -> str:
+    """Guide for creating a Cin7 Core product with all required fields."""
+    return """Create a product in Cin7 Core:
+
+1. Read cin7://templates/product to see all available fields
+
+2. REQUIRED fields for Cin7 API:
+   - SKU (unique identifier)
+   - Name (product title)
+   - Category (product category)
+   - Status (Active or Inactive)
+   - Type (Stock, Service, or Bundle)
+   - UOM (Item, Case, Box, etc.)
+   - CostingMethod (FIFO, LIFO, or Average)
+   - DefaultLocation (warehouse location)
+
+3. Recommended fields:
+   - Brand (manufacturer name)
+   - Barcode (typically 12-digit UPC)
+   - PriceTier1, PriceTier2 (pricing)
+   - PurchasePrice (cost)
+   - Suppliers array (supplier information)
+
+4. Accounting fields (often required):
+   - COGSAccount, RevenueAccount, InventoryAccount
+   - PurchaseTaxRule, SaleTaxRule
+
+5. Use cin7_create_product tool with complete payload
+
+6. Verify creation with cin7_get_product using returned ID
+"""
+
+
+@server.prompt()
+async def update_batch() -> str:
+    """Guide for batch updating products with error collection."""
+    return """Batch update products in Cin7 Core:
+
+1. Retrieve products to update using cin7_products or snapshot tools
+
+2. For each product, read template: cin7://templates/product/{id}
+
+3. Prepare ALL changes (show user complete before/after list)
+
+4. Get explicit ONE-TIME approval from user for entire batch
+
+5. Execute updates with cin7_update_product for each product:
+   - Continue on failures (don't stop)
+   - Track successes and failures separately
+   - Show progress: ✓ Product 1/N, ✗ Product 2/N (error), etc.
+
+6. Report summary: X succeeded, Y failed
+
+7. For failures, show error details and offer to retry
+
+Error handling: Collect all errors, continue processing, report at end.
+"""
+
+
+@server.prompt()
+async def verify_required_fields() -> str:
+    """Check product data completeness before creation/update."""
+    return """Verify product has required Cin7 Core fields:
+
+Required fields checklist:
+□ SKU
+□ Name
+□ Category
+□ Status
+□ Type
+□ UOM
+□ CostingMethod
+□ DefaultLocation
+
+Recommended fields:
+□ Brand
+□ Barcode
+□ Pricing (PriceTier1, PriceTier2, PurchasePrice)
+
+Report any missing or empty required fields before proceeding.
+"""
+
+
