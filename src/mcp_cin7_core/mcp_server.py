@@ -2,16 +2,36 @@ from __future__ import annotations
 
 import os
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from dotenv import load_dotenv
+
+from .server import server as mcp_server
 
 load_dotenv()
 
 logger = logging.getLogger("mcp_cin7_core.mcp_server")
 
-app = FastAPI(title="mcp-cin7-core", version="0.2.0")
+# Create MCP streamable HTTP app first to initialize the session manager
+# The MCP SDK configures the endpoint at /mcp by default (streamable_http_path setting)
+mcp_app = mcp_server.streamable_http_app()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage the lifespan of the FastAPI app and MCP session manager."""
+    # Start the MCP session manager
+    async with mcp_server.session_manager.run():
+        logger.info("MCP session manager started")
+        yield
+    logger.info("MCP session manager stopped")
+
+app = FastAPI(title="mcp-cin7-core", version="0.2.0", lifespan=lifespan)
 
 BEARER_TOKEN = os.getenv("BEARER_TOKEN")
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "transport": "streamable-http"}
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -34,6 +54,5 @@ async def auth_middleware(request: Request, call_next):
 
     return await call_next(request)
 
-@app.get("/health")
-async def health():
-    return {"status": "ok", "transport": "streamable-http"}
+# Mount MCP app at root so the /mcp endpoint is accessible at /mcp
+app.mount("/", mcp_app)
