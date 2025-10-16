@@ -807,3 +807,59 @@ async def resource_product_by_sku(sku: str) -> str:
         await client.aclose()
 
 
+# ----------------------------- Supplier Template Resources -----------------------------
+
+@server.resource("cin7://templates/supplier")
+async def resource_supplier_template() -> str:
+    """Blank supplier template with all available fields.
+
+    Use this template to see what fields are available when creating suppliers.
+    """
+    template = {
+        "Name": "",  # REQUIRED: Supplier name
+        "ContactPerson": "",
+        "Phone": "",
+        "Email": "",
+        "Website": "",
+        "Address": {
+            "Line1": "",
+            "Line2": "",
+            "City": "",
+            "State": "",
+            "Postcode": "",
+            "Country": ""
+        },
+        "PaymentTerm": "",
+        "Discount": 0.0,
+        "TaxRule": "Tax Exempt",
+        "Currency": "USD"
+    }
+    return json.dumps(template, indent=2)
+
+
+@server.resource("cin7://templates/supplier/{supplier_id}")
+async def resource_supplier_by_id(supplier_id: str) -> str:
+    """Get existing supplier as template for updates."""
+    logger.info("Resource call: resource_supplier_by_id(supplier_id=%s)", supplier_id)
+    client = Cin7Client.from_env()
+    try:
+        supplier = await client.get_supplier(supplier_id=supplier_id)
+        logger.info("Resource result: resource_supplier_by_id -> %s", _truncate(str(supplier)))
+        return json.dumps(supplier, indent=2)
+    finally:
+        await client.aclose()
+
+
+@server.resource("cin7://templates/supplier/name/{name}")
+async def resource_supplier_by_name(name: str) -> str:
+    """Get existing supplier by name as template for updates."""
+    logger.info("Resource call: resource_supplier_by_name(name=%s)", name)
+    client = Cin7Client.from_env()
+    try:
+        supplier = await client.get_supplier(name=name)
+        logger.info("Resource result: resource_supplier_by_name -> %s", _truncate(str(supplier)))
+        return json.dumps(supplier, indent=2)
+    finally:
+        await client.aclose()
+
+
