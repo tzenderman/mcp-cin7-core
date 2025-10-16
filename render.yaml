@@ -3,12 +3,8 @@ services:
     name: mcp-cin7-core
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn mcp_cin7_core.http_app:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn mcp_cin7_core.mcp_server:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: ENV
-        value: production
-      - key: PYTHON_VERSION
-        value: 3.10
       # Secrets managed in Render dashboard; do not commit values.
       - key: CIN7_ACCOUNT_ID
         sync: false
@@ -16,5 +12,12 @@ services:
         sync: false
       - key: BEARER_TOKEN
         sync: false
-
-
+      # Default configuration values
+      - key: CIN7_BASE_URL
+        value: https://inventory.dearsystems.com/ExternalApi/v2/
+      - key: MCP_LOG_LEVEL
+        value: INFO
+      - key: ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.10
