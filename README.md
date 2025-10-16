@@ -1,6 +1,14 @@
 # mcp-cin7-core
 
-Model Context Protocol (MCP) server for Cin7 Core (DEAR) API.
+Model Context Protocol (MCP) server for Cin7 Core (DEAR) API using MCP Streamable HTTP transport.
+
+## Features
+
+- **MCP Streamable HTTP** - Web-based MCP transport with Bearer token authentication
+- **15 Tools** - CRUD operations for products, suppliers, sales, and snapshots
+- **6 Resources** - Template resources for products and suppliers
+- **3 Prompts** - Workflow guides for product operations
+- **Full Cin7 Core API integration** - Async HTTP client with logging and error handling
 
 ## Setup
 
@@ -9,13 +17,17 @@ Model Context Protocol (MCP) server for Cin7 Core (DEAR) API.
 ```bash
 uv venv
 uv pip install -r requirements.txt
+uv pip install -e .
 ```
 
 2. Copy `.env.example` to `.env` and fill credentials:
 
 ```bash
 cp .env.example .env
-# Edit .env to set CIN7_ACCOUNT_ID and CIN7_API_KEY
+# Edit .env to set:
+# - CIN7_ACCOUNT_ID
+# - CIN7_API_KEY  
+# - BEARER_TOKEN (for MCP HTTP auth)
 ```
 
 3. Quick import check:
@@ -24,121 +36,151 @@ cp .env.example .env
 uv run python -c "import mcp_cin7_core.server; print('OK')"
 ```
 
-## Secrets handling
+## Environment Variables
 
-- The server expects these environment variables:
-  - `CIN7_ACCOUNT_ID`, `CIN7_API_KEY` (required)
-  - `BEARER_TOKEN` (required for HTTP API auth; used by `/health`, `/me`, etc.)
-  - `CIN7_BASE_URL` (optional, defaults to https://inventory.dearsystems.com/ExternalApi/v2/)
-- `.env` loading behavior:
-  - On startup, the server loads `.env` from the current working directory.
-  - If not found, it automatically falls back to the project root directory (the repo root containing this README).
-- Recommended local setup:
-  - Keep secrets only in `.env` at the project root. No need to include them in Claude’s config.
-- Alternatives:
-  - You can set the variables in Claude Desktop’s server `env` block, or in your OS environment. Those will be visible to the server as well.
+**Required:**
+- `CIN7_ACCOUNT_ID` - Cin7 Core account identifier
+- `CIN7_API_KEY` - Cin7 Core API application key
+- `BEARER_TOKEN` - Authentication token for MCP HTTP endpoints
 
-## Run with Claude Desktop
+**Optional:**
+- `CIN7_BASE_URL` - Defaults to `https://inventory.dearsystems.com/ExternalApi/v2/`
+- `MCP_LOG_LEVEL` - Log level (default: INFO)
+- `MCP_LOG_FILE` - Enable file logging with rotation
 
-Add an MCP server entry to your Claude Desktop config. Example:
+## Running the Server
 
-```json
-{
-  "mcpServers": {
-    "mcp-cin7-core": {
-      "command": "/opt/homebrew/bin/uv",
-      "args": ["run", "python", "-m", "mcp_cin7_core.server"]
-    }
-  }
-}
+### Local Development
+
+```bash
+uv run uvicorn mcp_cin7_core.mcp_server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-If you prefer environment overrides instead of `.env`, you can add an `env` block:
+### Production (Render)
+
+The server is deployed on Render and configured via `render.yaml`. Environment variables are managed in the Render dashboard.
+
+Base URL: `https://mcp-cin7-core.onrender.com`
+
+## Testing the Server
+
+### Health Check
+
+```bash
+curl http://localhost:8000/health
+```
+
+### Initialize MCP Session
+
+```bash
+curl -X POST http://localhost:8000/mcp \
+  -H "Authorization: Bearer $BEARER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}'
+```
+
+### List Tools
+
+```bash
+curl -X POST http://localhost:8000/mcp \
+  -H "Authorization: Bearer $BEARER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}'
+```
+
+## Claude Desktop Integration
+
+Add to your Claude Desktop config (`~/.claude/config.json`):
 
 ```json
 {
   "mcpServers": {
-    "mcp-cin7-core": {
-      "command": "/opt/homebrew/bin/uv",
-      "args": ["run", "python", "-m", "mcp_cin7_core.server"],
-      "env": {
-        "CIN7_BASE_URL": "https://inventory.dearsystems.com/ExternalApi/v2/",
-        "CIN7_ACCOUNT_ID": "${CIN7_ACCOUNT_ID}",
-        "CIN7_API_KEY": "${CIN7_API_KEY}"
+    "cin7-core": {
+      "url": "http://localhost:8000/mcp",
+      "transport": "http",
+      "headers": {
+        "Authorization": "Bearer YOUR_BEARER_TOKEN_HERE"
       }
     }
   }
 }
 ```
 
-Alternatively, if you install this package, you can use the console script:
+For production (Render):
 
 ```json
 {
   "mcpServers": {
-    "mcp-cin7-core": {
-      "command": "/opt/homebrew/bin/uv",
-      "args": ["run", "mcp-cin7-core"]
+    "cin7-core": {
+      "url": "https://mcp-cin7-core.onrender.com/mcp",
+      "transport": "http",
+      "headers": {
+        "Authorization": "Bearer YOUR_BEARER_TOKEN_HERE"
+      }
     }
   }
 }
 ```
 
-## Connect to the HTTP API (local vs Render)
+## MCP Capabilities
 
-You can run the HTTP API locally via Uvicorn or use the Render-hosted URL. Both require a bearer token.
+### Tools (15)
 
-### Local HTTP server
+**Status & Auth:**
+- `cin7_status` - Validate credentials
+- `cin7_me` - Get account information
 
-1) Ensure environment variables are set (via `.env` or shell):
+**Products:**
+- `cin7_products` - List products with pagination and filters
+- `cin7_get_product` - Get single product by ID or SKU
+- `cin7_create_product` - Create new product
+- `cin7_update_product` - Update existing product
 
-```bash
-export BEARER_TOKEN=replace-with-a-strong-token
-export CIN7_ACCOUNT_ID=...
-export CIN7_API_KEY=...
-``)
+**Product Snapshots** (for large catalogs):
+- `cin7_products_snapshot_start` - Start background build
+- `cin7_products_snapshot_status` - Check build progress
+- `cin7_products_snapshot_chunk` - Fetch paginated results
+- `cin7_products_snapshot_close` - Clean up
 
-2) Start the FastAPI app locally:
+**Suppliers:**
+- `cin7_suppliers` - List suppliers
+- `cin7_get_supplier` - Get single supplier
+- `cin7_create_supplier` - Create supplier
+- `cin7_update_supplier` - Update supplier
 
-```bash
-# Option A: install package (preferred)
-uv pip install -e .
-uv run uvicorn mcp_cin7_core.http_app:app --host 0.0.0.0 --port 8000 --reload
+**Sales:**
+- `cin7_sales` - List sales with pagination
 
-# Option B: without installation, add src to PYTHONPATH
-PYTHONPATH=src uv run uvicorn mcp_cin7_core.http_app:app --host 0.0.0.0 --port 8000 --reload
-```
+### Resources (6)
 
-3) Call the API with the bearer token:
+**Product Templates:**
+- `cin7://templates/product` - Blank product template
+- `cin7://templates/product/{product_id}` - Existing product by ID
+- `cin7://templates/product/sku/{sku}` - Existing product by SKU
 
-```bash
-curl -s -H "Authorization: Bearer $BEARER_TOKEN" http://localhost:8000/health
-curl -s -H "Authorization: Bearer $BEARER_TOKEN" "http://localhost:8000/me"
-curl -s -H "Authorization: Bearer $BEARER_TOKEN" "http://localhost:8000/products?limit=5"
-```
+**Supplier Templates:**
+- `cin7://templates/supplier` - Blank supplier template
+- `cin7://templates/supplier/{supplier_id}` - Existing supplier by ID
+- `cin7://templates/supplier/name/{name}` - Existing supplier by name
 
-### Render-hosted server
+### Prompts (3)
 
-- Base URL: `https://mcp-cin7-core.onrender.com`
-- Ensure `BEARER_TOKEN`, `CIN7_ACCOUNT_ID`, and `CIN7_API_KEY` are set in the Render dashboard env.
-- Use the same bearer token when calling from your local machine:
+- `create_product` - Step-by-step guide for creating products
+- `update_batch` - Batch update workflow with error handling
+- `verify_required_fields` - Required fields checklist
 
-```bash
-export BASE_URL=https://mcp-cin7-core.onrender.com
-curl -s -H "Authorization: Bearer $BEARER_TOKEN" "$BASE_URL/health"
-curl -s -H "Authorization: Bearer $BEARER_TOKEN" "$BASE_URL/me"
-curl -s -H "Authorization: Bearer $BEARER_TOKEN" "$BASE_URL/products?limit=5"
-```
+## Architecture
 
-Notes:
-- `/health` requires the bearer token by design; omit authentication only if you modify the app.
-- Claude Desktop integration above uses the stdio MCP server (`mcp_cin7_core.server`) and does not talk to the HTTP app.
+- **`cin7_client.py`** - Async HTTP client for Cin7 Core API
+- **`server.py`** - FastMCP server with tools, resources, and prompts
+- **`mcp_server.py`** - FastAPI wrapper with MCP Streamable HTTP transport
 
-## Validate credentials
+See `CLAUDE.md` for detailed architecture documentation.
 
-Use the `cin7_status` tool which performs a lightweight authenticated call to `GET Product` with `Page=1` and `Limit=1` to validate connectivity. See Cin7 Core Products API docs: [Products](https://dearinventory.docs.apiary.io/#reference/product).
+## Documentation
 
-## Next steps
-
-- Implement: list products, get product by ID/SKU, search by name/SKU, create, and update.
-- Handle pagination flags and CSV export where requested.
+- See `CLAUDE.md` for comprehensive development documentation
+- See `docs/plans/` for implementation plans and progress
+- Cin7 Core API docs: https://dearinventory.docs.apiary.io/
