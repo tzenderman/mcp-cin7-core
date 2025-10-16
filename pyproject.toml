@@ -15,7 +15,7 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.scripts]
-mcp-cin7-core = "mcp_cin7_core.mcp_server:main"
+mcp-cin7-core = "mcp_cin7_core.http_server:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

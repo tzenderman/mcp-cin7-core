@@ -20,13 +20,13 @@
 - No additional dependencies needed
 - Commit: N/A (research only)
 
-**Task 2: Create mcp_server.py** ✅
-- Created `src/mcp_cin7_core/mcp_server.py` with basic FastAPI app
+**Task 2: Create http_server.py** ✅
+- Created `src/mcp_cin7_core/http_server.py` (originally mcp_server.py) with basic FastAPI app
 - Health endpoint working at `/health`
 - Commit: `2ac89deaeee46ff13a2c82ee36b3de16602ca81f`
 
 **Task 3: Add Bearer Token Auth** ✅
-- Added authentication middleware to `mcp_server.py`
+- Added authentication middleware to `http_server.py`
 - Health check skips auth, /mcp requires Bearer token
 - All tests passing (401 without token, passes with token)
 - Commit: `37563e551036d3083f0362796e19d2cc1bf58126`
@@ -34,8 +34,8 @@
 ### ✅ Completed Tasks (continued)
 
 **Task 4: Integrate MCP Streamable HTTP Transport** ✅
-- User manually added integration to `mcp_server.py`
-- Import: `from .server import server as mcp_server` ✅
+- User manually added integration to `http_server.py`
+- Import: `from .mcp_server import server as mcp_server` ✅
 - App creation: `mcp_app = mcp_server.streamable_http_app()` ✅
 - Mount: `app.mount("/mcp", mcp_app)` ✅
 - MCP endpoint tested and responding correctly
@@ -68,32 +68,54 @@
 - Verified all other tools still intact
 - Commit: `7d9b746`
 
-### 📋 Pending Tasks (5, 10-14)
+**Task 10: Update Render Deployment Configuration** ✅
+- Updated `render.yaml` to use `http_server.py` instead of `http_app.py`
+- Added `CIN7_BASE_URL` and `MCP_LOG_LEVEL` environment variables
+- Verified PORT environment variable support in http_server.py
+- Commit: `d59016d`
 
-- Task 5: Remove stdio Entry Point from server.py
-- Task 10: Update Render Deployment Configuration
-- Task 11: Remove Deprecated REST API
+**Task 11: Remove Deprecated REST API** ✅
+- Deleted `http_app.py` (465 lines)
+- Deleted `openapi.json` (426 lines)
+- Rewrote `CLAUDE.md` for MCP Streamable HTTP architecture
+- Rewrote `README.md` with updated instructions
+- ~1,000 lines of deprecated code removed
+- Commit: `6e567c3`
+
+**Task 5: Remove stdio Entry Point** ✅
+- Verified no stdio entry point exists in `mcp_server.py` (already removed or never implemented)
+- Confirmed `pyproject.toml` points to correct HTTP entry point: `mcp_cin7_core.http_server:main`
+- Tested console script `uv run mcp-cin7-core` - works correctly
+- No changes needed - task was already complete
+
+### 📋 Pending Tasks (12-14)
+
 - Task 12: Test Complete MCP Server Locally
 - Task 13: Configure Claude Desktop Configuration
 - Task 14: Final Testing & Deployment
 
 ### 📁 Current File State
 
-**Modified files:**
-- `src/mcp_cin7_core/mcp_server.py` - New MCP HTTP server (Tasks 2, 3, 4)
-- `src/mcp_cin7_core/server.py` - FastMCP definitions (Tasks 6, 7, 8, 9: resources, prompts, removed deprecated tools)
+**Core files (all complete):**
+- `src/mcp_cin7_core/mcp_server.py` - FastMCP server with tools, resources, prompts (Tasks 6, 7, 8, 9)
+- `src/mcp_cin7_core/http_server.py` - HTTP transport with auth (Tasks 2, 3, 4)
+- `src/mcp_cin7_core/cin7_client.py` - Async HTTP client (unchanged)
+- `render.yaml` - Deployment configuration (Task 10)
+- `pyproject.toml` - Console script entry point (Task 5 verified)
+- `CLAUDE.md` - MCP HTTP architecture docs (Task 11)
+- `README.md` - Updated instructions (Task 11)
 
-**Unchanged files:**
-- `src/mcp_cin7_core/server.py` - stdio entry point still present (Task 5 pending)
-- `src/mcp_cin7_core/http_app.py` - Old REST API (to be removed in Task 11)
-- `src/mcp_cin7_core/cin7_client.py` - HTTP client (no changes needed)
-- `render.yaml` - Does not exist yet (to be created in Task 10)
+**Removed files:**
+- `src/mcp_cin7_core/http_app.py` - Deprecated REST API (deleted in Task 11)
+- `src/mcp_cin7_core/openapi.json` - REST API spec (deleted in Task 11)
 
 ### 🎯 To Resume
 
-1. **Continue with Task 10:** Update Render Deployment Configuration
-2. **Then Task 11:** Remove Deprecated REST API
-3. **Note:** Task 5 (stdio removal) can be done after deployment config
+1. **Continue with Task 12:** Test Complete MCP Server Locally
+2. **Then Task 13:** Configure Claude Desktop
+3. **Finally Task 14:** Final Testing & Deployment
+
+**Status:** Core implementation complete! Tasks 1-11 done. Ready for final testing and deployment.
 
 ### 🔍 Lessons Learned
 

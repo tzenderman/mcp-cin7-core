@@ -36,7 +36,7 @@ The server automatically searches for `.env` in the current directory, falling b
 
 ```bash
 # Quick import check
-uv run python -c "import mcp_cin7_core.server; print('OK')"
+uv run python -c "import mcp_cin7_core.mcp_server; print('OK')"
 ```
 
 ## Running the Server
@@ -45,10 +45,10 @@ uv run python -c "import mcp_cin7_core.server; print('OK')"
 
 ```bash
 # Using uvicorn
-uv run uvicorn mcp_cin7_core.mcp_server:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn mcp_cin7_core.http_server:app --host 0.0.0.0 --port 8000 --reload
 
 # Using the main entrypoint
-uv run python -m mcp_cin7_core.mcp_server
+uv run python -m mcp_cin7_core.http_server
 ```
 
 The server provides:
@@ -83,7 +83,7 @@ curl -X POST http://localhost:8000/mcp \
 - Created via `Cin7Client.from_env()` which reads environment variables
 - Always call `await client.aclose()` after use to clean up connections
 
-**`src/mcp_cin7_core/server.py`** - MCP server implementation using FastMCP
+**`src/mcp_cin7_core/mcp_server.py`** - MCP server implementation using FastMCP
 - Exposes MCP tools for Cin7 Core operations (products, suppliers, sales)
 - Provides MCP resources for templates (products, suppliers)
 - Provides MCP prompts for workflow guidance
@@ -91,7 +91,7 @@ curl -X POST http://localhost:8000/mcp \
 - Implements product snapshot system for handling large datasets (see Snapshot System below)
 - All tool calls log entry/exit with truncated payloads for debugging
 
-**`src/mcp_cin7_core/mcp_server.py`** - FastAPI HTTP wrapper for MCP Streamable HTTP transport
+**`src/mcp_cin7_core/http_server.py`** - FastAPI HTTP wrapper for MCP Streamable HTTP transport
 - Mounts the FastMCP server at `/mcp` endpoint
 - Provides Bearer token authentication middleware
 - Health check endpoint at `/health`

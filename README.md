@@ -33,7 +33,7 @@ cp .env.example .env
 3. Quick import check:
 
 ```bash
-uv run python -c "import mcp_cin7_core.server; print('OK')"
+uv run python -c "import mcp_cin7_core.mcp_server; print('OK')"
 ```
 
 ## Environment Variables
@@ -53,7 +53,7 @@ uv run python -c "import mcp_cin7_core.server; print('OK')"
 ### Local Development
 
 ```bash
-uv run uvicorn mcp_cin7_core.mcp_server:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn mcp_cin7_core.http_server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Production (Render)
@@ -174,8 +174,8 @@ For production (Render):
 ## Architecture
 
 - **`cin7_client.py`** - Async HTTP client for Cin7 Core API
-- **`server.py`** - FastMCP server with tools, resources, and prompts
-- **`mcp_server.py`** - FastAPI wrapper with MCP Streamable HTTP transport
+- **`mcp_server.py`** - FastMCP server with tools, resources, and prompts
+- **`http_server.py`** - FastAPI wrapper with MCP Streamable HTTP transport
 
 See `CLAUDE.md` for detailed architecture documentation.
 
