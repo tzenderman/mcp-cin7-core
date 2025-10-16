@@ -5,13 +5,11 @@ import logging
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
 from .cin7_client import Cin7Client, Cin7ClientError
 from .server import (
-    server as mcp_server,
     cin7_products_snapshot_start,
     cin7_products_snapshot_chunk,
     cin7_products_snapshot_status,
@@ -66,37 +64,20 @@ async def require_bearer_auth(request: Request) -> None:
 # FastAPI application
 # ---------------------------------------------------------------------------
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Initialize and cleanup MCP server on startup/shutdown."""
-    # Start the MCP server's streamable HTTP session manager
-    async with mcp_server.session_manager.run():
-        yield
+app = FastAPI(title="mcp-cin7-core", version="0.1.0")
 
-app = FastAPI(title="mcp-cin7-core", version="0.1.0", lifespan=lifespan)
-
-# Mount MCP Streamable HTTP endpoint at root so it's accessible at /mcp
-mcp_app = mcp_server.streamable_http_app()
-app.mount("", mcp_app)
 
 # Middleware to log ALL incoming requests
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Skip detailed logging for mounted MCP app to avoid interfering with request processing
-    if request.url.path.startswith("/mcp"):
-        logger.info("MCP REQUEST: %s %s", request.method, request.url.path)
-        response = await call_next(request)
-        logger.info("MCP RESPONSE: %s %s -> %d", request.method, request.url.path, response.status_code)
-        return response
-
     logger.info("=" * 80)
     logger.info("INCOMING REQUEST: %s %s", request.method, request.url.path)
     logger.info("Query params: %s", dict(request.query_params))
-
+    
     # Log headers (redact auth)
     headers_to_log = {k: v for k, v in request.headers.items() if k.lower() not in ["authorization"]}
     logger.info("Headers (auth redacted): %s", headers_to_log)
-
+    
     # For POST/PUT, log body
     if request.method in ["POST", "PUT", "PATCH"]:
         try:
@@ -105,7 +86,7 @@ async def log_requests(request: Request, call_next):
             logger.info("Request body (length=%d): %s", len(body_str), body_str[:2000])
         except Exception as e:
             logger.warning("Could not read request body: %s", str(e))
-
+    
     response = await call_next(request)
     logger.info("RESPONSE: %s %s -> %d", request.method, request.url.path, response.status_code)
     logger.info("=" * 80)
