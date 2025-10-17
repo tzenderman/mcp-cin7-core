@@ -142,9 +142,9 @@ async def oauth_server_metadata():
         "issuer": f"https://{AUTH0_DOMAIN}/",
         "authorization_endpoint": f"https://{AUTH0_DOMAIN}/authorize",
         "token_endpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
+        "registration_endpoint": f"https://{AUTH0_DOMAIN}/oidc/register",
         "scopes_supported": ["openid", "profile", "email"],
         "response_types_supported": ["code"],
-        # Dynamic client registration is not supported; omit registration_endpoint.
     }
     return metadata
 
