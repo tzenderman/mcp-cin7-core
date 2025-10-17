@@ -47,6 +47,9 @@ AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
 AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
 AUTH0_ALGORITHMS = ["RS256"]
 
+# MCP Server Base URL (for OAuth resource identifier)
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "https://mcp-cin7-core.onrender.com")
+
 
 async def verify_oauth_token(token: str) -> Optional[dict]:
     """Verify Auth0 JWT token."""
@@ -157,9 +160,9 @@ async def oauth_resource_metadata():
         return Response(status_code=501, content="OAuth not configured on this server")
 
     return {
-        "resource": "mcp",
+        "resource": MCP_SERVER_URL,
         "scopes_supported": ["openid", "profile", "email"],
-        "authorization_server": f"https://{AUTH0_DOMAIN}",
+        "authorization_server": f"https://{AUTH0_DOMAIN}/",  # Must match issuer URL exactly (with trailing slash)
         "registration_endpoint": f"https://{AUTH0_DOMAIN}/oidc/register",
     }
 

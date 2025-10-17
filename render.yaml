@@ -18,7 +18,9 @@ services:
       - key: AUTH0_CLIENT_SECRET
         sync: false
       - key: AUTH0_AUDIENCE
-        value: https://dev-vi7cwfdy8h5xbffp.us.auth0.com/api/v2/
+        value: https://mcp-cin7-core.onrender.com
+      - key: MCP_SERVER_URL
+        value: https://mcp-cin7-core.onrender.com
       # Default configuration values
       - key: CIN7_BASE_URL
         value: https://inventory.dearsystems.com/ExternalApi/v2/
