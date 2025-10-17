@@ -124,6 +124,45 @@ async def oauth_discovery():
     }
 
 # --------------------------------------------------------------------------- #
+# RFC 8414 / .well-known OAuth 2.0 metadata – required by some MCP clients
+# --------------------------------------------------------------------------- #
+
+@app.get("/.well-known/oauth-authorization-server")
+@app.get("/.well-known/oauth-authorization-server/mcp")
+async def oauth_server_metadata():
+    """Return OAuth 2.0 Authorization Server metadata.
+
+    Claude Desktop queries these endpoints before starting the OAuth flow.
+    We map them to our Auth0 tenant so the client can discover endpoints.
+    """
+    if not AUTH0_DOMAIN:
+        return Response(status_code=501, content="OAuth not configured on this server")
+
+    metadata = {
+        "issuer": f"https://{AUTH0_DOMAIN}/",
+        "authorization_endpoint": f"https://{AUTH0_DOMAIN}/authorize",
+        "token_endpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
+        "scopes_supported": ["openid", "profile", "email"],
+        "response_types_supported": ["code"],
+        # Dynamic client registration is not supported; omit registration_endpoint.
+    }
+    return metadata
+
+
+@app.get("/.well-known/oauth-protected-resource")
+@app.get("/.well-known/oauth-protected-resource/mcp")
+async def oauth_resource_metadata():
+    """Return minimal OAuth 2.0 Resource Server metadata required by clients."""
+    if not AUTH0_DOMAIN:
+        return Response(status_code=501, content="OAuth not configured on this server")
+
+    return {
+        "resource": "mcp",
+        "scopes_supported": ["openid", "profile", "email"],
+        "authorization_server": f"https://{AUTH0_DOMAIN}"
+    }
+
+# --------------------------------------------------------------------------- #
 # Verbose request logger – logs every request/response when MCP_LOG_LEVEL=DEBUG
 # This is placed BEFORE the auth middleware so we capture even unauthorized
 # attempts. Enable by setting the env var MCP_LOG_LEVEL=DEBUG on Render.
