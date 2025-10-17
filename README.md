@@ -27,7 +27,7 @@ cp .env.example .env
 # Edit .env to set:
 # - CIN7_ACCOUNT_ID
 # - CIN7_API_KEY  
-# - BEARER_TOKEN (for MCP HTTP auth)
+# - AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET (for OAuth)
 ```
 
 3. Quick import check:
@@ -41,7 +41,10 @@ uv run python -c "import mcp_cin7_core.mcp_server; print('OK')"
 **Required:**
 - `CIN7_ACCOUNT_ID` - Cin7 Core account identifier
 - `CIN7_API_KEY` - Cin7 Core API application key
-- `BEARER_TOKEN` - Authentication token for MCP HTTP endpoints
+- `AUTH0_DOMAIN` - Auth0 tenant domain (e.g., `dev-abc123.us.auth0.com`)
+- `AUTH0_CLIENT_ID` - Auth0 application client ID
+- `AUTH0_CLIENT_SECRET` - Auth0 application client secret
+- `AUTH0_AUDIENCE` - Auth0 API audience (usually your Auth0 API URL)
 
 **Optional:**
 - `CIN7_BASE_URL` - Defaults to `https://inventory.dearsystems.com/ExternalApi/v2/`
@@ -72,7 +75,7 @@ curl http://localhost:8000/health
 
 ### Testing with MCP Inspector (Recommended)
 
-The MCP Streamable HTTP transport requires session management, which makes simple curl testing complex. We recommend using the **MCP Inspector** or **Claude Desktop** for testing.
+The MCP Streamable HTTP transport requires session management and OAuth authentication. We recommend using the **MCP Inspector** for local testing.
 
 **Quick test with curl (health check only):**
 ```bash
@@ -80,57 +83,45 @@ curl http://localhost:8000/health
 # Expected: {"status": "ok", "transport": "streamable-http"}
 ```
 
-**For full MCP protocol testing**, the workflow requires:
-
-1. **Initialize** - Creates a session and returns session ID via SSE stream
-2. **Subsequent calls** - Must include the `Mcp-Session-Id` header
-
-This multi-step process is best handled by MCP clients rather than manual curl commands.
-
-**Example initialize call** (returns SSE stream with session info):
+**OAuth discovery endpoint:**
 ```bash
-curl -X POST http://localhost:8000/mcp \
-  -H "Authorization: Bearer $BEARER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}'
+curl http://localhost:8000/.well-known/mcp-oauth
+# Returns Auth0 OAuth configuration for MCP clients
 ```
 
 ## Testing with MCP Inspector
 
-**Note:** Claude Desktop does not currently support HTTP-based MCP servers. Use the MCP Inspector for testing.
-
-With your server running on `http://localhost:8000`, test it with:
+Test your local server with the MCP Inspector:
 
 ```bash
 npx @modelcontextprotocol/inspector http://localhost:8000/mcp
 ```
-
-When prompted, enter your Bearer token from the `.env` file.
 
 The Inspector provides a UI to:
 - List and call all 15 tools
 - Read all 6 resources
 - View all 3 prompts
 - Test the complete MCP protocol
+- Test OAuth flow (requires running server with Auth0 configured)
 
-## Future: Claude Desktop Integration
+## Claude Desktop Integration (Remote Connector)
 
-When Claude Desktop adds HTTP transport support, the configuration will be:
+**Note:** Claude Desktop supports remote MCP servers for Pro, Max, Team, and Enterprise plans.
 
-```json
-{
-  "mcpServers": {
-    "cin7-core": {
-      "url": "http://localhost:8000/mcp",
-      "transport": "http",
-      "headers": {
-        "Authorization": "Bearer YOUR_BEARER_TOKEN_HERE"
-      }
-    }
-  }
-}
-```
+### Adding Your Server to Claude Desktop
+
+1. Deploy your server to Render (see Deployment section below)
+2. Open **Claude Desktop** → **Settings** → **Connectors**
+3. Click **"Add Connector"**
+4. Enter your server URL: `https://mcp-cin7-core.onrender.com/mcp`
+5. Claude will auto-discover your OAuth configuration
+6. Click **"Authorize"** and log in with your Auth0 account
+7. Done! Your Cin7 tools are now available in Claude Desktop
+
+**Access Control:**
+- Only whitelisted email addresses can authenticate (configured in Auth0)
+- OAuth tokens are managed automatically by Claude Desktop
+- Cin7 credentials stay secure on the server
 
 ## MCP Capabilities
 

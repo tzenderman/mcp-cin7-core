@@ -26,7 +26,10 @@ uv pip install -e .
 Copy `.env.example` to `.env` and configure:
 - `CIN7_ACCOUNT_ID` - Cin7 Core account identifier
 - `CIN7_API_KEY` - Cin7 Core API application key
-- `BEARER_TOKEN` - Authentication token for MCP HTTP endpoints
+- `AUTH0_DOMAIN` - Auth0 tenant domain (e.g., `dev-abc123.us.auth0.com`)
+- `AUTH0_CLIENT_ID` - Auth0 application client ID
+- `AUTH0_CLIENT_SECRET` - Auth0 application client secret
+- `AUTH0_AUDIENCE` - Auth0 API audience
 - `CIN7_BASE_URL` - (Optional) Defaults to `https://inventory.dearsystems.com/ExternalApi/v2/`
 - `MCP_LOG_LEVEL` - (Optional) Logging level (default: INFO)
 
@@ -53,7 +56,8 @@ uv run python -m mcp_cin7_core.http_server
 
 The server provides:
 - **Health endpoint**: `GET /health` (no auth required)
-- **MCP endpoint**: `/mcp` (requires Bearer token auth)
+- **OAuth discovery**: `GET /.well-known/mcp-oauth` (no auth required)
+- **MCP endpoint**: `/mcp` (requires OAuth 2.0 authentication via Auth0)
   - Supports both batch (JSON) and streaming (SSE) responses
   - Built-in session management
   - Full MCP protocol support (tools, resources, prompts)
@@ -61,15 +65,14 @@ The server provides:
 ### Testing MCP endpoints
 
 ```bash
-# Test health (no auth)
+# Test health (no auth required)
 curl http://localhost:8000/health
 
-# Initialize MCP session
-curl -X POST http://localhost:8000/mcp \
-  -H "Authorization: Bearer $BEARER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}'
+# Test OAuth discovery (no auth required)
+curl http://localhost:8000/.well-known/mcp-oauth
+
+# For full MCP protocol testing, use MCP Inspector
+npx @modelcontextprotocol/inspector http://localhost:8000/mcp
 ```
 
 ## Architecture

@@ -112,9 +112,10 @@
 - Documented MCP Inspector as primary testing method
 - Commit: `4a2c36a`
 
-### 📋 Pending Tasks (14 only)
+### 📋 Pending Tasks (15-16)
 
-- Task 14: Final Testing & Deployment to Render
+- Task 15: Implement OAuth 2.0 with Auth0 (NEW)
+- Task 16: Deploy to Render & Test with Claude Desktop (was Task 14)
 
 ### 📁 Current File State
 
@@ -133,21 +134,32 @@
 
 ### 🎯 Current Status
 
-**✅ Implementation Complete!** Tasks 1-13 done (Task 13 blocked by Claude Desktop limitations).
+**✅ Core Implementation Complete!** Tasks 1-13 done.
 
-**Next: Task 14 - Deployment to Render**
+**🔄 In Progress: OAuth Integration for Remote Access**
 
-The MCP server is fully functional and tested locally. Ready to deploy to production when needed.
+**Discovery:** Claude Desktop DOES support remote MCP servers via Settings → Connectors!
+- Requires OAuth 2.0 authentication (not simple Bearer tokens)
+- Auth0 integration needed for secure team access
+- Will enable coworkers to connect to deployed server
+
+**Next Steps:**
+1. **Task 15:** Implement OAuth 2.0 with Auth0
+2. **Task 16:** Deploy to Render & test with Claude Desktop remote connectors
 
 ### 📊 Summary
 
+**Completed:**
 - ✅ **15 Tools** - All CRUD operations working
 - ✅ **6 Resources** - Template resources for products and suppliers
 - ✅ **3 Prompts** - Workflow guidance prompts
 - ✅ **CORS Support** - Web clients can connect
-- ✅ **Bearer Auth** - Secure authentication working
-- ✅ **Tested** - Verified with MCP Inspector
-- 🚀 **Ready** - Can deploy to Render anytime
+- ✅ **Streamable HTTP** - MCP transport working
+- ✅ **Tested Locally** - Verified with MCP Inspector
+
+**In Progress:**
+- 🔄 **OAuth 2.0** - Auth0 integration for remote team access
+- 🔄 **Remote Deployment** - Render deployment for Claude Desktop connectors
 
 ### 🔍 Lessons Learned
 
@@ -969,6 +981,226 @@ Change config from `http://localhost:8000/mcp` to production URL
 ```bash
 git add .
 git commit -m "chore: deployment verified, MCP Streamable HTTP migration complete"
+```
+
+---
+
+## Task 15: Implement OAuth 2.0 with Auth0
+
+**Goal:** Replace Bearer token auth with OAuth 2.0 so coworkers can securely connect via Claude Desktop remote servers.
+
+**Requirements:**
+- Team size: 1-2 people
+- Access control: Email whitelist
+- Deployment URL: `https://mcp-cin7-core.onrender.com`
+- Claude callback: `https://claude.ai/api/mcp/auth_callback`
+
+**Files:**
+- Modify: `src/mcp_cin7_core/http_server.py`
+- Modify: `requirements.txt`
+- Modify: `render.yaml`
+
+---
+
+### Step 1: Create Auth0 Application
+
+1. Go to Auth0 Dashboard → Applications → Create Application
+2. Name: "MCP Cin7 Core Server"
+3. Type: Select **"Regular Web Application"**
+4. Click Create
+
+### Step 2: Configure Auth0 Application Settings
+
+In the application settings:
+
+**Allowed Callback URLs:**
+```
+https://claude.ai/api/mcp/auth_callback
+https://claude.com/api/mcp/auth_callback
+```
+
+**Allowed Logout URLs:**
+```
+https://claude.ai
+https://claude.com
+```
+
+**Allowed Web Origins:**
+```
+https://claude.ai
+https://claude.com
+```
+
+**Grant Types:**
+- ✅ Authorization Code
+- ✅ Refresh Token
+
+**Save** the settings.
+
+### Step 3: Note Your Auth0 Credentials
+
+From the application settings page, copy:
+- **Domain** (e.g., `dev-abc123.us.auth0.com`)
+- **Client ID** (e.g., `abc123xyz...`)
+- **Client Secret** (click "Show" to reveal)
+
+### Step 4: Configure Email Whitelist in Auth0
+
+**Option A: Auth0 Rules (Free tier):**
+
+Go to Auth Pipeline → Rules → Create Rule:
+```javascript
+function emailWhitelist(user, context, callback) {
+  const whitelist = ['you@example.com', 'coworker@example.com'];
+  const userEmail = user.email.toLowerCase();
+  
+  if (!whitelist.includes(userEmail)) {
+    return callback(new UnauthorizedError('Access denied'));
+  }
+  
+  return callback(null, user, context);
+}
+```
+
+**Option B: Auth0 Actions (Newer):**
+
+Go to Actions → Flows → Login → Custom → Create Action:
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  const whitelist = ['you@example.com', 'coworker@example.com'];
+  if (!whitelist.includes(event.user.email.toLowerCase())) {
+    api.access.deny('Access denied - contact admin');
+  }
+};
+```
+
+### Step 5: Update requirements.txt
+
+Add JWT validation library:
+```
+python-jose[cryptography]==3.3.0
+```
+
+Run: `uv pip install -r requirements.txt`
+
+### Step 6: Update http_server.py with OAuth Support
+
+Replace the Bearer token middleware with OAuth JWT validation:
+
+```python
+from jose import jwt, JWTError
+from typing import Optional
+
+# Auth0 configuration
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")  # e.g., dev-abc123.us.auth0.com
+AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", f"https://{AUTH0_DOMAIN}/api/v2/")
+AUTH0_ALGORITHMS = ["RS256"]
+
+def verify_token(token: str) -> Optional[dict]:
+    """Verify Auth0 JWT token."""
+    try:
+        # Get Auth0 public keys
+        jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
+        jwks_client = jwt.PyJWKClient(jwks_url)
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        
+        # Verify and decode token
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=AUTH0_ALGORITHMS,
+            audience=AUTH0_AUDIENCE,
+            issuer=f"https://{AUTH0_DOMAIN}/"
+        )
+        return payload
+    except JWTError as e:
+        logger.warning(f"JWT verification failed: {e}")
+        return None
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Skip auth for health check and CORS preflight
+    if request.url.path == "/health" or request.method == "OPTIONS":
+        return await call_next(request)
+
+    # Require OAuth for /mcp endpoints
+    if request.url.path.startswith("/mcp"):
+        if not AUTH0_DOMAIN:
+            logger.error("AUTH0_DOMAIN not configured")
+            return Response(status_code=500, content="Server misconfigured")
+            
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip()
+        
+        if not token:
+            logger.warning("No token provided")
+            return Response(status_code=401, content="Unauthorized")
+        
+        # Verify OAuth token
+        payload = verify_token(token)
+        if not payload:
+            logger.warning(f"Invalid token from {request.client.host}")
+            return Response(status_code=401, content="Unauthorized")
+        
+        # Optional: Additional email validation
+        email = payload.get("email", "")
+        logger.info(f"Authenticated user: {email}")
+
+    return await call_next(request)
+```
+
+### Step 7: Update render.yaml
+
+Add Auth0 environment variables:
+```yaml
+envVars:
+  # ... existing vars ...
+  - key: AUTH0_DOMAIN
+    value: your-tenant.us.auth0.com
+  - key: AUTH0_AUDIENCE
+    value: https://your-tenant.us.auth0.com/api/v2/
+```
+
+### Step 8: Add OAuth Discovery Endpoint
+
+Add to `http_server.py` for MCP OAuth discovery:
+```python
+@app.get("/.well-known/mcp-oauth")
+async def oauth_discovery():
+    """OAuth discovery endpoint for MCP clients."""
+    return {
+        "authorizationEndpoint": f"https://{AUTH0_DOMAIN}/authorize",
+        "tokenEndpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
+        "clientId": os.getenv("AUTH0_CLIENT_ID"),
+        "scopes": ["openid", "profile", "email"]
+    }
+```
+
+### Step 9: Test Locally
+
+1. Set Auth0 vars in `.env`
+2. Restart server
+3. Test with MCP Inspector (should now require OAuth login)
+
+### Step 10: Deploy to Render
+
+1. Set Auth0 environment variables in Render dashboard
+2. Deploy
+3. Test health endpoint: `curl https://mcp-cin7-core.onrender.com/health`
+
+### Step 11: Add to Claude Desktop
+
+In Claude Desktop: Settings → Connectors → Add Connector
+- Enter your Render URL: `https://mcp-cin7-core.onrender.com/mcp`
+- Claude will auto-discover OAuth config
+- Complete OAuth login flow
+- Done!
+
+### Step 12: Commit
+
+```bash
+git add src/mcp_cin7_core/http_server.py requirements.txt render.yaml
+git commit -m "feat: implement OAuth 2.0 authentication with Auth0"
 ```
 
 ---

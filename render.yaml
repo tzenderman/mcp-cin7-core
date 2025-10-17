@@ -10,8 +10,15 @@ services:
         sync: false
       - key: CIN7_API_KEY
         sync: false
-      - key: BEARER_TOKEN
+      # Auth0 OAuth Configuration
+      - key: AUTH0_DOMAIN
+        value: dev-vi7cwfdy8h5xbffp.us.auth0.com
+      - key: AUTH0_CLIENT_ID
+        value: ozd2PsYq31cNuRtsVL8yWyfOVlFPrHxp
+      - key: AUTH0_CLIENT_SECRET
         sync: false
+      - key: AUTH0_AUDIENCE
+        value: https://dev-vi7cwfdy8h5xbffp.us.auth0.com/api/v2/
       # Default configuration values
       - key: CIN7_BASE_URL
         value: https://inventory.dearsystems.com/ExternalApi/v2/
@@ -20,4 +27,4 @@ services:
       - key: ENV
         value: production
       - key: PYTHON_VERSION
-        value: 3.10
+        value: 3.12.0

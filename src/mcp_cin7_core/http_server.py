@@ -3,9 +3,12 @@ from __future__ import annotations
 import os
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from jose import jwt, JWTError
+import httpx
 
 from .mcp_server import server as mcp_server
 
@@ -38,36 +41,119 @@ app.add_middleware(
     expose_headers=["Mcp-Session-Id"],
 )
 
-BEARER_TOKEN = os.getenv("BEARER_TOKEN")
+# Auth0 OAuth Configuration
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
+AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
+AUTH0_ALGORITHMS = ["RS256"]
+
+
+async def verify_oauth_token(token: str) -> Optional[dict]:
+    """Verify Auth0 JWT token."""
+    if not AUTH0_DOMAIN:
+        return None
+        
+    try:
+        # Get Auth0 public keys (JWKS)
+        jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
+        
+        # Fetch JWKS
+        async with httpx.AsyncClient() as client:
+            response = await client.get(jwks_url)
+            jwks = response.json()
+        
+        # Get the key ID from token header
+        unverified_header = jwt.get_unverified_header(token)
+        rsa_key = {}
+        
+        for key in jwks["keys"]:
+            if key["kid"] == unverified_header["kid"]:
+                rsa_key = {
+                    "kty": key["kty"],
+                    "kid": key["kid"],
+                    "use": key["use"],
+                    "n": key["n"],
+                    "e": key["e"]
+                }
+                break
+        
+        if not rsa_key:
+            logger.warning("No matching key found in JWKS")
+            return None
+        
+        # Verify and decode token
+        payload = jwt.decode(
+            token,
+            rsa_key,
+            algorithms=AUTH0_ALGORITHMS,
+            audience=AUTH0_AUDIENCE,
+            issuer=f"https://{AUTH0_DOMAIN}/"
+        )
+        return payload
+        
+    except JWTError as e:
+        logger.warning(f"JWT verification failed: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"OAuth verification error: {e}")
+        return None
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "transport": "streamable-http"}
 
+
+@app.get("/.well-known/mcp-oauth")
+async def oauth_discovery():
+    """OAuth discovery endpoint for MCP clients (Claude Desktop).
+    
+    This endpoint allows Claude Desktop to auto-discover OAuth configuration
+    when adding the server as a remote connector.
+    """
+    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID:
+        return Response(
+            status_code=501,
+            content="OAuth not configured on this server"
+        )
+    
+    return {
+        "authorizationEndpoint": f"https://{AUTH0_DOMAIN}/authorize",
+        "tokenEndpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
+        "clientId": AUTH0_CLIENT_ID,
+        "scopes": ["openid", "profile", "email"]
+    }
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    # Skip auth for health check and CORS preflight
-    if request.url.path == "/health" or request.method == "OPTIONS":
+    # Skip auth for health check, OAuth discovery, and CORS preflight
+    if request.url.path in ["/health", "/.well-known/mcp-oauth"] or request.method == "OPTIONS":
         return await call_next(request)
 
-    # Require auth for /mcp endpoints
+    # Require OAuth for /mcp endpoints
     if request.url.path.startswith("/mcp"):
+        if not AUTH0_DOMAIN:
+            logger.error("AUTH0_DOMAIN not configured - OAuth required")
+            return Response(status_code=500, content="Server misconfigured")
+        
         auth_header = request.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip()
 
-        if not BEARER_TOKEN:
-            logger.error("BEARER_TOKEN not configured")
-            return Response(status_code=500, content="Server misconfigured")
+        if not token:
+            logger.warning("No authorization token provided")
+            return Response(status_code=401, content="Unauthorized - No token")
 
-        # Debug logging
-        logger.debug(f"Auth header received: {auth_header!r}")
-        logger.debug(f"Extracted token: {token!r}")
-        logger.debug(f"Expected token: {BEARER_TOKEN!r}")
-        logger.debug(f"Tokens match: {token == BEARER_TOKEN}")
-
-        if token != BEARER_TOKEN:
-            logger.warning(f"Invalid token attempt from {request.client.host}")
+        # Verify OAuth token
+        logger.debug(f"Validating OAuth token for request from {request.client.host}")
+        payload = await verify_oauth_token(token)
+        
+        if not payload:
+            logger.warning(f"✗ OAuth authentication failed from {request.client.host}")
             return Response(status_code=401, content="Unauthorized")
+        
+        # Successfully authenticated
+        email = payload.get("email", "unknown")
+        logger.info(f"✓ OAuth authenticated: {email}")
+        return await call_next(request)
 
     return await call_next(request)
 
