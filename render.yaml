@@ -23,7 +23,7 @@ services:
       - key: CIN7_BASE_URL
         value: https://inventory.dearsystems.com/ExternalApi/v2/
       - key: MCP_LOG_LEVEL
-        value: INFO
+        value: DEBUG
       - key: ENV
         value: production
       - key: PYTHON_VERSION

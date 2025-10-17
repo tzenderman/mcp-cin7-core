@@ -123,6 +123,27 @@ async def oauth_discovery():
         "scopes": ["openid", "profile", "email"]
     }
 
+# --------------------------------------------------------------------------- #
+# Verbose request logger – logs every request/response when MCP_LOG_LEVEL=DEBUG
+# This is placed BEFORE the auth middleware so we capture even unauthorized
+# attempts. Enable by setting the env var MCP_LOG_LEVEL=DEBUG on Render.
+# --------------------------------------------------------------------------- #
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):  # noqa: D401
+    """Log inbound and outbound HTTP traffic when logger is in DEBUG mode."""
+    if logger.isEnabledFor(logging.DEBUG):
+        headers = {k: v for k, v in request.headers.items()}
+        logger.debug("↘︎ %s %s headers=%s client=%s", request.method, request.url.path, headers, request.client.host)
+
+    response: Response = await call_next(request)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("↗︎ %s %s → %s", request.method, request.url.path, response.status_code)
+
+    return response
+
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Skip auth for health check, OAuth discovery, and CORS preflight
