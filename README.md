@@ -70,8 +70,24 @@ Base URL: `https://mcp-cin7-core.onrender.com`
 curl http://localhost:8000/health
 ```
 
-### Initialize MCP Session
+### Testing with MCP Inspector (Recommended)
 
+The MCP Streamable HTTP transport requires session management, which makes simple curl testing complex. We recommend using the **MCP Inspector** or **Claude Desktop** for testing.
+
+**Quick test with curl (health check only):**
+```bash
+curl http://localhost:8000/health
+# Expected: {"status": "ok", "transport": "streamable-http"}
+```
+
+**For full MCP protocol testing**, the workflow requires:
+
+1. **Initialize** - Creates a session and returns session ID via SSE stream
+2. **Subsequent calls** - Must include the `Mcp-Session-Id` header
+
+This multi-step process is best handled by MCP clients rather than manual curl commands.
+
+**Example initialize call** (returns SSE stream with session info):
 ```bash
 curl -X POST http://localhost:8000/mcp \
   -H "Authorization: Bearer $BEARER_TOKEN" \
@@ -80,41 +96,33 @@ curl -X POST http://localhost:8000/mcp \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}'
 ```
 
-### List Tools
+## Testing with MCP Inspector
+
+**Note:** Claude Desktop does not currently support HTTP-based MCP servers. Use the MCP Inspector for testing.
+
+With your server running on `http://localhost:8000`, test it with:
 
 ```bash
-curl -X POST http://localhost:8000/mcp \
-  -H "Authorization: Bearer $BEARER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}'
+npx @modelcontextprotocol/inspector http://localhost:8000/mcp
 ```
 
-## Claude Desktop Integration
+When prompted, enter your Bearer token from the `.env` file.
 
-Add to your Claude Desktop config (`~/.claude/config.json`):
+The Inspector provides a UI to:
+- List and call all 15 tools
+- Read all 6 resources
+- View all 3 prompts
+- Test the complete MCP protocol
+
+## Future: Claude Desktop Integration
+
+When Claude Desktop adds HTTP transport support, the configuration will be:
 
 ```json
 {
   "mcpServers": {
     "cin7-core": {
       "url": "http://localhost:8000/mcp",
-      "transport": "http",
-      "headers": {
-        "Authorization": "Bearer YOUR_BEARER_TOKEN_HERE"
-      }
-    }
-  }
-}
-```
-
-For production (Render):
-
-```json
-{
-  "mcpServers": {
-    "cin7-core": {
-      "url": "https://mcp-cin7-core.onrender.com/mcp",
       "transport": "http",
       "headers": {
         "Authorization": "Bearer YOUR_BEARER_TOKEN_HERE"
