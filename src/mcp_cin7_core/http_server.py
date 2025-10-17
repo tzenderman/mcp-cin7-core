@@ -4,6 +4,7 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from .mcp_server import server as mcp_server
@@ -27,6 +28,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="mcp-cin7-core", version="0.2.0", lifespan=lifespan)
 
+# Add CORS middleware for MCP Inspector and web clients
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Mcp-Session-Id"],
+)
+
 BEARER_TOKEN = os.getenv("BEARER_TOKEN")
 
 @app.get("/health")
@@ -35,8 +46,8 @@ async def health():
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    # Skip auth for health check
-    if request.url.path == "/health":
+    # Skip auth for health check and CORS preflight
+    if request.url.path == "/health" or request.method == "OPTIONS":
         return await call_next(request)
 
     # Require auth for /mcp endpoints
@@ -47,6 +58,12 @@ async def auth_middleware(request: Request, call_next):
         if not BEARER_TOKEN:
             logger.error("BEARER_TOKEN not configured")
             return Response(status_code=500, content="Server misconfigured")
+
+        # Debug logging
+        logger.debug(f"Auth header received: {auth_header!r}")
+        logger.debug(f"Extracted token: {token!r}")
+        logger.debug(f"Expected token: {BEARER_TOKEN!r}")
+        logger.debug(f"Tokens match: {token == BEARER_TOKEN}")
 
         if token != BEARER_TOKEN:
             logger.warning(f"Invalid token attempt from {request.client.host}")
