@@ -159,7 +159,8 @@ async def oauth_resource_metadata():
     return {
         "resource": "mcp",
         "scopes_supported": ["openid", "profile", "email"],
-        "authorization_server": f"https://{AUTH0_DOMAIN}"
+        "authorization_server": f"https://{AUTH0_DOMAIN}",
+        "registration_endpoint": f"https://{AUTH0_DOMAIN}/oidc/register",
     }
 
 # --------------------------------------------------------------------------- #
