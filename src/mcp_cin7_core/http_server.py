@@ -67,10 +67,17 @@ async def verify_oauth_token(token: str) -> Optional[dict]:
         
         # Get the key ID from token header
         unverified_header = jwt.get_unverified_header(token)
+
+        # Check if kid exists in token header
+        token_kid = unverified_header.get("kid")
+        if not token_kid:
+            logger.warning(f"Token header missing 'kid' field. Header: {unverified_header}")
+            return None
+
         rsa_key = {}
-        
+
         for key in jwks["keys"]:
-            if key["kid"] == unverified_header["kid"]:
+            if key["kid"] == token_kid:
                 rsa_key = {
                     "kty": key["kty"],
                     "kid": key["kid"],
@@ -79,9 +86,9 @@ async def verify_oauth_token(token: str) -> Optional[dict]:
                     "e": key["e"]
                 }
                 break
-        
+
         if not rsa_key:
-            logger.warning("No matching key found in JWKS")
+            logger.warning(f"No matching key found in JWKS for kid: {token_kid}")
             return None
         
         # Verify and decode token
@@ -208,6 +215,7 @@ async def auth_middleware(request: Request, call_next):
 
         # Verify OAuth token
         logger.debug(f"Validating OAuth token for request from {request.client.host}")
+        logger.debug(f"Token (first 50 chars): {token[:50]}...")
         payload = await verify_oauth_token(token)
         
         if not payload:
