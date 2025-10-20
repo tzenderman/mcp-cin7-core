@@ -52,58 +52,42 @@ MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "https://mcp-cin7-core.onrender.com
 
 
 async def verify_oauth_token(token: str) -> Optional[dict]:
-    """Verify Auth0 token using introspection endpoint.
+    """Verify Auth0 token using the /userinfo endpoint.
 
-    This supports both JWT and JWE tokens, which is necessary because
-    Auth0 issues JWE tokens to dynamically registered clients (like Claude Desktop).
+    Auth0 does not support RFC 7662 token introspection. For opaque/JWE tokens
+    (which Auth0 issues to dynamically registered clients like Claude Desktop),
+    the recommended validation approach is to call the /userinfo endpoint.
+
+    If the endpoint returns user info successfully, the token is valid.
+    This is Auth0's standard pattern for opaque token validation.
+
+    Reference: https://community.auth0.com/t/opaque-token-validation-with-introspection-endpoint/37553
     """
-    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID or not AUTH0_CLIENT_SECRET:
-        logger.error("Auth0 credentials not configured")
+    if not AUTH0_DOMAIN:
+        logger.error("AUTH0_DOMAIN not configured")
         return None
 
     try:
-        # Use Auth0 token introspection endpoint
-        # This works for both JWT and JWE tokens
-        introspect_url = f"https://{AUTH0_DOMAIN}/oauth/token/introspection"
+        # Use Auth0's /userinfo endpoint to validate the token
+        # Auth0 must validate the token before returning user info,
+        # making this an indirect token validation mechanism
+        userinfo_url = f"https://{AUTH0_DOMAIN}/userinfo"
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                introspect_url,
-                data={
-                    "token": token,
-                    "token_type_hint": "access_token"
-                },
-                auth=(AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET),
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
+            response = await client.get(
+                userinfo_url,
+                headers={"Authorization": f"Bearer {token}"}
             )
 
             if response.status_code != 200:
-                logger.warning(f"Token introspection failed with status {response.status_code}: {response.text}")
+                logger.warning(f"Token validation via /userinfo failed with status {response.status_code}: {response.text}")
                 return None
 
-            result = response.json()
+            # Successfully retrieved user info - token is valid
+            user_info = response.json()
+            logger.debug(f"Token validated successfully. User: {user_info.get('email', user_info.get('sub', 'unknown'))}")
 
-            # Check if token is active
-            if not result.get("active", False):
-                logger.warning("Token is not active")
-                return None
-
-            # Validate audience if present
-            if AUTH0_AUDIENCE:
-                token_aud = result.get("aud")
-                # aud can be a string or list
-                if isinstance(token_aud, str):
-                    audiences = [token_aud]
-                elif isinstance(token_aud, list):
-                    audiences = token_aud
-                else:
-                    audiences = []
-
-                if AUTH0_AUDIENCE not in audiences:
-                    logger.warning(f"Token audience mismatch. Expected: {AUTH0_AUDIENCE}, Got: {token_aud}")
-                    return None
-
-            return result
+            return user_info
 
     except Exception as e:
         logger.error(f"OAuth verification error: {e}")
