@@ -7,7 +7,6 @@ from typing import Optional
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from jose import jwt, JWTError
 import httpx
 
 from .mcp_server import server as mcp_server
@@ -45,6 +44,7 @@ app.add_middleware(
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
 AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
+AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET")
 AUTH0_ALGORITHMS = ["RS256"]
 
 # MCP Server Base URL (for OAuth resource identifier)
@@ -52,58 +52,59 @@ MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "https://mcp-cin7-core.onrender.com
 
 
 async def verify_oauth_token(token: str) -> Optional[dict]:
-    """Verify Auth0 JWT token."""
-    if not AUTH0_DOMAIN:
+    """Verify Auth0 token using introspection endpoint.
+
+    This supports both JWT and JWE tokens, which is necessary because
+    Auth0 issues JWE tokens to dynamically registered clients (like Claude Desktop).
+    """
+    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID or not AUTH0_CLIENT_SECRET:
+        logger.error("Auth0 credentials not configured")
         return None
-        
+
     try:
-        # Get Auth0 public keys (JWKS)
-        jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
-        
-        # Fetch JWKS
+        # Use Auth0 token introspection endpoint
+        # This works for both JWT and JWE tokens
+        introspect_url = f"https://{AUTH0_DOMAIN}/oauth/token/introspection"
+
         async with httpx.AsyncClient() as client:
-            response = await client.get(jwks_url)
-            jwks = response.json()
-        
-        # Get the key ID from token header
-        unverified_header = jwt.get_unverified_header(token)
+            response = await client.post(
+                introspect_url,
+                data={
+                    "token": token,
+                    "token_type_hint": "access_token"
+                },
+                auth=(AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET),
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
+            )
 
-        # Check if kid exists in token header
-        token_kid = unverified_header.get("kid")
-        if not token_kid:
-            logger.warning(f"Token header missing 'kid' field. Header: {unverified_header}")
-            return None
+            if response.status_code != 200:
+                logger.warning(f"Token introspection failed with status {response.status_code}: {response.text}")
+                return None
 
-        rsa_key = {}
+            result = response.json()
 
-        for key in jwks["keys"]:
-            if key["kid"] == token_kid:
-                rsa_key = {
-                    "kty": key["kty"],
-                    "kid": key["kid"],
-                    "use": key["use"],
-                    "n": key["n"],
-                    "e": key["e"]
-                }
-                break
+            # Check if token is active
+            if not result.get("active", False):
+                logger.warning("Token is not active")
+                return None
 
-        if not rsa_key:
-            logger.warning(f"No matching key found in JWKS for kid: {token_kid}")
-            return None
-        
-        # Verify and decode token
-        payload = jwt.decode(
-            token,
-            rsa_key,
-            algorithms=AUTH0_ALGORITHMS,
-            audience=AUTH0_AUDIENCE,
-            issuer=f"https://{AUTH0_DOMAIN}/"
-        )
-        return payload
-        
-    except JWTError as e:
-        logger.warning(f"JWT verification failed: {e}")
-        return None
+            # Validate audience if present
+            if AUTH0_AUDIENCE:
+                token_aud = result.get("aud")
+                # aud can be a string or list
+                if isinstance(token_aud, str):
+                    audiences = [token_aud]
+                elif isinstance(token_aud, list):
+                    audiences = token_aud
+                else:
+                    audiences = []
+
+                if AUTH0_AUDIENCE not in audiences:
+                    logger.warning(f"Token audience mismatch. Expected: {AUTH0_AUDIENCE}, Got: {token_aud}")
+                    return None
+
+            return result
+
     except Exception as e:
         logger.error(f"OAuth verification error: {e}")
         return None
