@@ -44,8 +44,6 @@ app.add_middleware(
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
 AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
-AUTH0_CLIENT_SECRET = os.getenv("AUTH0_CLIENT_SECRET")
-AUTH0_ALGORITHMS = ["RS256"]
 
 # MCP Server Base URL (for OAuth resource identifier)
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "https://mcp-cin7-core.onrender.com")

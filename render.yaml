@@ -15,8 +15,6 @@ services:
         value: dev-vi7cwfdy8h5xbffp.us.auth0.com
       - key: AUTH0_CLIENT_ID
         value: ozd2PsYq31cNuRtsVL8yWyfOVlFPrHxp
-      - key: AUTH0_CLIENT_SECRET
-        sync: false
       - key: AUTH0_AUDIENCE
         value: https://mcp-cin7-core.onrender.com
       - key: MCP_SERVER_URL
