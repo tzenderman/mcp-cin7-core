@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import os
 import logging
+import time
+import hashlib
+import json
+import base64
 from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, Request, Response
@@ -14,6 +18,13 @@ from .mcp_server import server as mcp_server
 load_dotenv()
 
 logger = logging.getLogger("mcp_cin7_core.http_server")
+
+# Token validation cache
+# Maps SHA256(token) -> (user_info, expiry_timestamp)
+# Note: Tokens are hashed before caching to prevent plaintext exposure
+_token_cache: dict[str, tuple[dict, float]] = {}
+TOKEN_CACHE_TTL = int(os.getenv("TOKEN_CACHE_TTL_SECONDS", "120"))  # 2 minutes default
+TOKEN_CACHE_MAX_SIZE = int(os.getenv("TOKEN_CACHE_MAX_SIZE", "1000"))  # Prevent unbounded growth
 
 # Create MCP streamable HTTP app first to initialize the session manager
 # The MCP SDK configures the endpoint at /mcp by default (streamable_http_path setting)
@@ -49,21 +60,83 @@ AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "https://mcp-cin7-core.onrender.com")
 
 
+def _hash_token(token: str) -> str:
+    """Hash token using SHA256 to prevent plaintext storage in cache."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _get_token_expiry(token: str) -> Optional[float]:
+    """Extract expiry timestamp from JWT token if possible.
+
+    Returns None if token is opaque (not JWT) or cannot be parsed.
+    JWE tokens (encrypted JWTs from Auth0) cannot be decoded without the key,
+    so this will return None for those.
+    """
+    try:
+        # JWT format: header.payload.signature
+        parts = token.split('.')
+        if len(parts) != 3:
+            return None
+
+        # Decode payload (add padding if needed)
+        payload_b64 = parts[1]
+        padding = '=' * (4 - len(payload_b64) % 4)
+        payload_json = base64.urlsafe_b64decode(payload_b64 + padding)
+        payload = json.loads(payload_json)
+
+        # Extract exp claim if present
+        exp = payload.get('exp')
+        if exp and isinstance(exp, (int, float)):
+            return float(exp)
+
+        return None
+    except Exception:
+        # Token is opaque or encrypted (JWE) - cannot parse
+        return None
+
+
 async def verify_oauth_token(token: str) -> Optional[dict]:
-    """Verify Auth0 token using the /userinfo endpoint.
+    """Verify Auth0 token using the /userinfo endpoint with caching.
 
     Auth0 does not support RFC 7662 token introspection. For opaque/JWE tokens
     (which Auth0 issues to dynamically registered clients like Claude Desktop),
     the recommended validation approach is to call the /userinfo endpoint.
 
-    If the endpoint returns user info successfully, the token is valid.
-    This is Auth0's standard pattern for opaque token validation.
+    Security features:
+    - Tokens are hashed (SHA256) before caching to prevent plaintext exposure
+    - JWT expiry is checked if token is parseable
+    - Cache TTL is minimum of TOKEN_CACHE_TTL_SECONDS and JWT expiry
+    - Results cached for 2 minutes by default to avoid Auth0 rate limits
 
     Reference: https://community.auth0.com/t/opaque-token-validation-with-introspection-endpoint/37553
     """
     if not AUTH0_DOMAIN:
         logger.error("AUTH0_DOMAIN not configured")
         return None
+
+    # Hash token to prevent plaintext storage
+    token_hash = _hash_token(token)
+
+    # Check if JWT has expired (if parseable)
+    token_expiry = _get_token_expiry(token)
+    now = time.time()
+
+    if token_expiry and now >= token_expiry:
+        logger.warning("Token has expired (JWT exp claim)")
+        # Remove from cache if present
+        _token_cache.pop(token_hash, None)
+        return None
+
+    # Check cache
+    if token_hash in _token_cache:
+        user_info, expiry = _token_cache[token_hash]
+        if now < expiry:
+            logger.debug(f"Token validated from cache. User: {user_info.get('email', user_info.get('sub', 'unknown'))}")
+            return user_info
+        else:
+            # Expired - remove from cache
+            logger.debug("Cached token expired, re-validating")
+            del _token_cache[token_hash]
 
     try:
         # Use Auth0's /userinfo endpoint to validate the token
@@ -74,7 +147,8 @@ async def verify_oauth_token(token: str) -> Optional[dict]:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 userinfo_url,
-                headers={"Authorization": f"Bearer {token}"}
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=5.0
             )
 
             if response.status_code != 200:
@@ -83,7 +157,40 @@ async def verify_oauth_token(token: str) -> Optional[dict]:
 
             # Successfully retrieved user info - token is valid
             user_info = response.json()
-            logger.debug(f"Token validated successfully. User: {user_info.get('email', user_info.get('sub', 'unknown'))}")
+            logger.info(f"Token validated via Auth0. User: {user_info.get('email', user_info.get('sub', 'unknown'))}")
+
+            # Calculate cache expiry: minimum of cache TTL and token expiry
+            cache_expiry = now + TOKEN_CACHE_TTL
+            if token_expiry:
+                # Use the earlier of cache TTL or JWT expiry
+                expiry = min(cache_expiry, token_expiry)
+                ttl_used = int(expiry - now)
+                logger.debug(f"JWT expires at {token_expiry}, cache TTL is {TOKEN_CACHE_TTL}s, using {ttl_used}s")
+            else:
+                # Opaque/JWE token - use cache TTL only
+                expiry = cache_expiry
+                logger.debug(f"Opaque token (no exp claim), using cache TTL of {TOKEN_CACHE_TTL}s")
+
+            # Cache the result using hashed token as key
+            _token_cache[token_hash] = (user_info, expiry)
+
+            # Enforce cache size limit
+            if len(_token_cache) > TOKEN_CACHE_MAX_SIZE:
+                # First try removing expired entries
+                expired_tokens = [
+                    t for t, (_, exp) in _token_cache.items() if now >= exp
+                ]
+                for t in expired_tokens:
+                    del _token_cache[t]
+                logger.debug(f"Cleaned up {len(expired_tokens)} expired tokens from cache")
+
+                # If still over limit, remove oldest (lowest expiry)
+                if len(_token_cache) > TOKEN_CACHE_MAX_SIZE:
+                    sorted_tokens = sorted(_token_cache.items(), key=lambda x: x[1][1])
+                    tokens_to_remove = len(_token_cache) - TOKEN_CACHE_MAX_SIZE
+                    for t, _ in sorted_tokens[:tokens_to_remove]:
+                        del _token_cache[t]
+                    logger.debug(f"Evicted {tokens_to_remove} tokens to enforce cache size limit")
 
             return user_info
 
@@ -93,7 +200,20 @@ async def verify_oauth_token(token: str) -> Optional[dict]:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "transport": "streamable-http"}
+    """Health check endpoint with token cache statistics."""
+    now = time.time()
+    active_tokens = sum(1 for _, exp in _token_cache.values() if now < exp)
+
+    return {
+        "status": "ok",
+        "transport": "streamable-http",
+        "token_cache": {
+            "size": len(_token_cache),
+            "active": active_tokens,
+            "ttl_seconds": TOKEN_CACHE_TTL,
+            "max_size": TOKEN_CACHE_MAX_SIZE
+        }
+    }
 
 
 @app.get("/.well-known/mcp-oauth")

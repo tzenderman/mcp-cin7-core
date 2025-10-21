@@ -32,8 +32,17 @@ Copy `.env.example` to `.env` and configure:
 - `AUTH0_AUDIENCE` - Auth0 API audience
 - `CIN7_BASE_URL` - (Optional) Defaults to `https://inventory.dearsystems.com/ExternalApi/v2/`
 - `MCP_LOG_LEVEL` - (Optional) Logging level (default: INFO)
+- `TOKEN_CACHE_TTL_SECONDS` - (Optional) Token validation cache TTL in seconds (default: 120 = 2 minutes)
+- `TOKEN_CACHE_MAX_SIZE` - (Optional) Maximum number of cached tokens (default: 1000)
 
 The server automatically searches for `.env` in the current directory, falling back to the project root if not found.
+
+**Token Caching & Security**: To prevent hitting Auth0's rate limits (10 requests/minute on `/userinfo`), the server caches token validation results with these security features:
+- Tokens are hashed (SHA256) before caching - never stored in plaintext
+- JWT expiry claims are validated if present
+- Cache TTL is the minimum of `TOKEN_CACHE_TTL_SECONDS` and JWT expiry
+- Default 2-minute cache window balances security (revocation delay) and performance
+- Cache statistics available at `/health` endpoint
 
 ### Validation
 
