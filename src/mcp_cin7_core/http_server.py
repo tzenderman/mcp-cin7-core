@@ -233,7 +233,7 @@ async def oauth_discovery():
         "authorizationEndpoint": f"https://{AUTH0_DOMAIN}/authorize",
         "tokenEndpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
         "clientId": AUTH0_CLIENT_ID,
-        "scopes": ["openid", "profile", "email"]
+        "scopes": ["openid", "profile", "email", "offline_access"]
     }
 
 # --------------------------------------------------------------------------- #
@@ -255,8 +255,9 @@ async def oauth_server_metadata():
         "issuer": f"https://{AUTH0_DOMAIN}/",
         "authorization_endpoint": f"https://{AUTH0_DOMAIN}/authorize",
         "token_endpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
-        "registration_endpoint": f"https://{AUTH0_DOMAIN}/oidc/register",
-        "scopes_supported": ["openid", "profile", "email"],
+        # REMOVED: registration_endpoint - forces clients to use configured client_id
+        # instead of dynamically registering new applications
+        "scopes_supported": ["openid", "profile", "email", "offline_access"],
         "response_types_supported": ["code"],
     }
     return metadata
@@ -271,9 +272,9 @@ async def oauth_resource_metadata():
 
     return {
         "resource": MCP_SERVER_URL,
-        "scopes_supported": ["openid", "profile", "email"],
+        "scopes_supported": ["openid", "profile", "email", "offline_access"],
         "authorization_server": f"https://{AUTH0_DOMAIN}/",  # Must match issuer URL exactly (with trailing slash)
-        "registration_endpoint": f"https://{AUTH0_DOMAIN}/oidc/register",
+        # REMOVED: registration_endpoint - forces clients to use configured client_id
     }
 
 # --------------------------------------------------------------------------- #

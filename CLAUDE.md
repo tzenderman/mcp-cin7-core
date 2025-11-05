@@ -44,6 +44,32 @@ The server automatically searches for `.env` in the current directory, falling b
 - Default 2-minute cache window balances security (revocation delay) and performance
 - Cache statistics available at `/health` endpoint
 
+### Auth0 Application Configuration
+
+To enable 30-day sessions and prevent daily logouts, configure your Auth0 application (the one whose `client_id` is in your `.env` file):
+
+**Required Settings in Auth0 Dashboard:**
+
+1. **Application > Settings > Application URIs:**
+   - Add `https://claude.ai/api/mcp/auth_callback` to **Allowed Callback URLs**
+   - Add your server URL (e.g., `https://mcp-cin7-core.onrender.com`) to **Allowed Web Origins** if needed
+
+2. **Application > Settings > Advanced Settings > Grant Types:**
+   - ✅ Enable **Authorization Code**
+   - ✅ Enable **Refresh Token**
+
+3. **Application > Settings > Advanced Settings > OAuth:**
+   - **Refresh Token Rotation**: Enable (toggle ON)
+   - **Refresh Token Expiration**: Set to `2592000` seconds (30 days)
+   - **Absolute Lifetime**: Enable (toggle ON)
+
+**Why These Settings Matter:**
+- Without **Refresh Token Rotation** enabled, access tokens expire after 24 hours with no way to refresh
+- The `offline_access` scope (now included in all OAuth endpoints) requests refresh tokens
+- With these settings, Claude Desktop can automatically refresh tokens for 30 days without re-authentication
+
+**Important:** The server no longer advertises dynamic client registration. Claude Desktop will use your configured `AUTH0_CLIENT_ID` instead of creating new "Claude" third-party applications. Clean up any old dynamically registered "Claude" applications in your Auth0 dashboard if desired.
+
 ### Validation
 
 ```bash
