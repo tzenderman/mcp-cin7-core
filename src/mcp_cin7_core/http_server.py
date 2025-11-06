@@ -219,7 +219,7 @@ async def health():
 @app.get("/.well-known/mcp-oauth")
 async def oauth_discovery():
     """OAuth discovery endpoint for MCP clients (Claude Desktop).
-    
+
     This endpoint allows Claude Desktop to auto-discover OAuth configuration
     when adding the server as a remote connector.
     """
@@ -228,11 +228,12 @@ async def oauth_discovery():
             status_code=501,
             content="OAuth not configured on this server"
         )
-    
+
     return {
         "authorizationEndpoint": f"https://{AUTH0_DOMAIN}/authorize",
         "tokenEndpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
         "clientId": AUTH0_CLIENT_ID,
+        "audience": AUTH0_AUDIENCE if AUTH0_AUDIENCE else None,
         "scopes": ["openid", "profile", "email", "offline_access"]
     }
 
