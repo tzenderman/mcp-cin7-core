@@ -152,11 +152,11 @@ async def _build_snapshot(sid: str, page: int, limit: int, name: Optional[str], 
 @server.tool()
 async def cin7_status() -> Dict[str, Any]:
     """Verify Cin7 Core credentials by fetching a minimal page of products."""
-    logger.info("Tool call: cin7_status()")
+    logger.debug("Tool call: cin7_status()")
     client = Cin7Client.from_env()
     try:
         result = await client.health_check()
-        logger.info("Tool result: cin7_status() -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_status() -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -165,11 +165,11 @@ async def cin7_status() -> Dict[str, Any]:
 @server.tool()
 async def cin7_me() -> Dict[str, Any]:
     """Call Cin7 Core Me endpoint to verify identity and account context."""
-    logger.info("Tool call: cin7_me()")
+    logger.debug("Tool call: cin7_me()")
     client = Cin7Client.from_env()
     try:
         result = await client.get_me()
-        logger.info("Tool result: cin7_me() -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_me() -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -269,7 +269,7 @@ async def cin7_products(
     - sku: Optional SKU filter
     - fields: Optional list of additional field names to include per product
     """
-    logger.info(
+    logger.debug(
         "Tool call: cin7_products(page=%s, limit=%s, name=%s, sku=%s)",
         page,
         limit,
@@ -305,7 +305,7 @@ async def cin7_products(
             # If projection fails for any reason, return the original result
             pass
 
-        logger.info("Tool result: cin7_products -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_products -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -335,7 +335,7 @@ async def cin7_get_product(
 
     Returns the first matching product object.
     """
-    logger.info(
+    logger.debug(
         "Tool call: cin7_get_product(product_id=%s, sku=%s)",
         product_id,
         sku,
@@ -343,7 +343,7 @@ async def cin7_get_product(
     client = Cin7Client.from_env()
     try:
         result = await client.get_product(product_id=product_id, sku=sku)
-        logger.info("Tool result: cin7_get_product -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_get_product -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -367,11 +367,11 @@ async def cin7_create_product(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     Docs: https://dearinventory.docs.apiary.io/#reference/product/product/post
     """
-    logger.info("Tool call: cin7_create_product(payload=%s)", _truncate(str(payload)))
+    logger.debug("Tool call: cin7_create_product(payload=%s)", _truncate(str(payload)))
     client = Cin7Client.from_env()
     try:
         result = await client.save_product(payload)
-        logger.info("Tool result: cin7_create_product -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_create_product -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -385,11 +385,11 @@ async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     Docs: https://dearinventory.docs.apiary.io/#reference/product
     """
-    logger.info("Tool call: cin7_update_product(payload=%s)", _truncate(str(payload)))
+    logger.debug("Tool call: cin7_update_product(payload=%s)", _truncate(str(payload)))
     client = Cin7Client.from_env()
     try:
         result = await client.update_product(payload)
-        logger.info("Tool result: cin7_update_product -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_update_product -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -409,7 +409,7 @@ async def cin7_suppliers(
     - limit: Items per page (Cin7 limits apply)
     - name: Optional name filter
     """
-    logger.info(
+    logger.debug(
         "Tool call: cin7_suppliers(page=%s, limit=%s, name=%s)",
         page,
         limit,
@@ -418,7 +418,7 @@ async def cin7_suppliers(
     client = Cin7Client.from_env()
     try:
         result = await client.list_suppliers(page=page, limit=limit, name=name)
-        logger.info("Tool result: cin7_suppliers -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_suppliers -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -433,7 +433,7 @@ async def cin7_get_supplier(
 
     Returns the first matching supplier object.
     """
-    logger.info(
+    logger.debug(
         "Tool call: cin7_get_supplier(supplier_id=%s, name=%s)",
         supplier_id,
         name,
@@ -441,7 +441,7 @@ async def cin7_get_supplier(
     client = Cin7Client.from_env()
     try:
         result = await client.get_supplier(supplier_id=supplier_id, name=name)
-        logger.info("Tool result: cin7_get_supplier -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_get_supplier -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -466,11 +466,11 @@ async def cin7_create_supplier(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     Docs: https://dearinventory.docs.apiary.io/#reference/supplier/supplier/post
     """
-    logger.info("Tool call: cin7_create_supplier(payload=%s)", _truncate(str(payload)))
+    logger.debug("Tool call: cin7_create_supplier(payload=%s)", _truncate(str(payload)))
     client = Cin7Client.from_env()
     try:
         result = await client.save_supplier(payload)
-        logger.info("Tool result: cin7_create_supplier -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_create_supplier -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -485,11 +485,11 @@ async def cin7_update_supplier(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     Docs: https://dearinventory.docs.apiary.io/#reference/supplier/supplier/put
     """
-    logger.info("Tool call: cin7_update_supplier(payload=%s)", _truncate(str(payload)))
+    logger.debug("Tool call: cin7_update_supplier(payload=%s)", _truncate(str(payload)))
     client = Cin7Client.from_env()
     try:
         result = await client.update_supplier(payload)
-        logger.info("Tool result: cin7_update_supplier -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_update_supplier -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -522,7 +522,7 @@ async def cin7_sales(
     
     Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale-list/get
     """
-    logger.info(
+    logger.debug(
         "Tool call: cin7_sales(page=%s, limit=%s, search=%s)",
         page,
         limit,
@@ -557,7 +557,7 @@ async def cin7_sales(
             # If projection fails for any reason, return the original result
             pass
 
-        logger.info("Tool result: cin7_sales -> %s", _truncate(str(result)))
+        logger.debug("Tool result: cin7_sales -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -601,11 +601,11 @@ async def resource_product_by_id(product_id: str) -> str:
 
     Returns the current product data which can be modified and used with cin7_update_product.
     """
-    logger.info("Resource call: resource_product_by_id(product_id=%s)", product_id)
+    logger.debug("Resource call: resource_product_by_id(product_id=%s)", product_id)
     client = Cin7Client.from_env()
     try:
         product = await client.get_product(product_id=int(product_id))
-        logger.info("Resource result: resource_product_by_id -> %s", _truncate(str(product)))
+        logger.debug("Resource result: resource_product_by_id -> %s", _truncate(str(product)))
         return json.dumps(product, indent=2)
     finally:
         await client.aclose()
@@ -617,11 +617,11 @@ async def resource_product_by_sku(sku: str) -> str:
 
     Returns the current product data which can be modified and used with cin7_update_product.
     """
-    logger.info("Resource call: resource_product_by_sku(sku=%s)", sku)
+    logger.debug("Resource call: resource_product_by_sku(sku=%s)", sku)
     client = Cin7Client.from_env()
     try:
         product = await client.get_product(sku=sku)
-        logger.info("Resource result: resource_product_by_sku -> %s", _truncate(str(product)))
+        logger.debug("Resource result: resource_product_by_sku -> %s", _truncate(str(product)))
         return json.dumps(product, indent=2)
     finally:
         await client.aclose()
@@ -660,11 +660,11 @@ async def resource_supplier_template() -> str:
 @server.resource("cin7://templates/supplier/{supplier_id}")
 async def resource_supplier_by_id(supplier_id: str) -> str:
     """Get existing supplier as template for updates."""
-    logger.info("Resource call: resource_supplier_by_id(supplier_id=%s)", supplier_id)
+    logger.debug("Resource call: resource_supplier_by_id(supplier_id=%s)", supplier_id)
     client = Cin7Client.from_env()
     try:
         supplier = await client.get_supplier(supplier_id=supplier_id)
-        logger.info("Resource result: resource_supplier_by_id -> %s", _truncate(str(supplier)))
+        logger.debug("Resource result: resource_supplier_by_id -> %s", _truncate(str(supplier)))
         return json.dumps(supplier, indent=2)
     finally:
         await client.aclose()
@@ -673,11 +673,11 @@ async def resource_supplier_by_id(supplier_id: str) -> str:
 @server.resource("cin7://templates/supplier/name/{name}")
 async def resource_supplier_by_name(name: str) -> str:
     """Get existing supplier by name as template for updates."""
-    logger.info("Resource call: resource_supplier_by_name(name=%s)", name)
+    logger.debug("Resource call: resource_supplier_by_name(name=%s)", name)
     client = Cin7Client.from_env()
     try:
         supplier = await client.get_supplier(name=name)
-        logger.info("Resource result: resource_supplier_by_name -> %s", _truncate(str(supplier)))
+        logger.debug("Resource result: resource_supplier_by_name -> %s", _truncate(str(supplier)))
         return json.dumps(supplier, indent=2)
     finally:
         await client.aclose()

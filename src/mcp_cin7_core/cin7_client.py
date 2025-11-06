@@ -74,7 +74,7 @@ class Cin7Client:
                 content = request.content.decode() if isinstance(request.content, (bytes, bytearray)) else str(request.content)
             except Exception:
                 content = "<un-decodable body>"
-            logger.info(
+            logger.debug(
                 "HTTP Request: %s %s headers=%s body=%s",
                 request.method,
                 str(request.url),
@@ -92,7 +92,7 @@ class Cin7Client:
                 body_text = response.text
             except Exception:
                 body_text = "<un-decodable body>"
-            logger.info(
+            logger.debug(
                 "HTTP Response: %s %s status=%s elapsed_ms=%s body=%s",
                 response.request.method,
                 str(response.request.url),
@@ -254,15 +254,15 @@ class Cin7Client:
 
         Docs: https://dearinventory.docs.apiary.io/#reference/product/product
         """
-        logger.info("Cin7Client.update_product called with payload: %s", product)
-        logger.info("Payload size: %d chars, keys: %s", len(str(product)), list(product.keys()) if isinstance(product, dict) else "NOT A DICT")
-        
+        logger.debug("Cin7Client.update_product called with payload: %s", product)
+        logger.debug("Payload size: %d chars, keys: %s", len(str(product)), list(product.keys()) if isinstance(product, dict) else "NOT A DICT")
+
         try:
             response = await self.client.put("Product", json=product)
-            logger.info("Cin7 API PUT Product response status: %d", response.status_code)
-            logger.info("Cin7 API response headers: %s", dict(response.headers))
-            logger.info("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
-            
+            logger.debug("Cin7 API PUT Product response status: %d", response.status_code)
+            logger.debug("Cin7 API response headers: %s", dict(response.headers))
+            logger.debug("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
+
             try:
                 data = response.json()
             except Exception as json_error:
@@ -270,14 +270,14 @@ class Cin7Client:
                 data = {"raw": _truncate(response.text or "")}
 
             if response.status_code in (200, 204):
-                logger.info("Product update successful, returning data")
+                logger.debug("Product update successful, returning data")
                 return data if isinstance(data, dict) else {"result": data}
 
             error_msg = f"Product update error: {response.status_code} {response.text[:500]}"
             logger.error("Product update failed: %s", error_msg)
-            logger.error("Full response text: %s", response.text)
+            logger.debug("Full response text: %s", response.text)
             raise Cin7ClientError(error_msg)
-            
+
         except Cin7ClientError:
             raise
         except Exception as e:
@@ -292,15 +292,15 @@ class Cin7Client:
 
         Docs: https://dearinventory.docs.apiary.io/#reference/product/product
         """
-        logger.info("Cin7Client.save_product called with payload: %s", product)
-        logger.info("Payload size: %d chars, keys: %s", len(str(product)), list(product.keys()) if isinstance(product, dict) else "NOT A DICT")
-        
+        logger.debug("Cin7Client.save_product called with payload: %s", product)
+        logger.debug("Payload size: %d chars, keys: %s", len(str(product)), list(product.keys()) if isinstance(product, dict) else "NOT A DICT")
+
         try:
             response = await self.client.post("Product", json=product)
-            logger.info("Cin7 API POST Product response status: %d", response.status_code)
-            logger.info("Cin7 API response headers: %s", dict(response.headers))
-            logger.info("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
-            
+            logger.debug("Cin7 API POST Product response status: %d", response.status_code)
+            logger.debug("Cin7 API response headers: %s", dict(response.headers))
+            logger.debug("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
+
             try:
                 data = response.json()
             except Exception as json_error:
@@ -308,14 +308,14 @@ class Cin7Client:
                 data = {"raw": _truncate(response.text or "")}
 
             if response.status_code in (200, 201):
-                logger.info("Product save successful, returning data")
+                logger.debug("Product save successful, returning data")
                 return data if isinstance(data, dict) else {"result": data}
 
             error_msg = f"Product save error: {response.status_code} {response.text[:500]}"
             logger.error("Product save failed: %s", error_msg)
-            logger.error("Full response text: %s", response.text)
+            logger.debug("Full response text: %s", response.text)
             raise Cin7ClientError(error_msg)
-            
+
         except Cin7ClientError:
             raise
         except Exception as e:

@@ -122,24 +122,24 @@ async def verify_oauth_token(token: str) -> Optional[dict]:
     now = time.time()
 
     if token_expiry:
-        logger.info(f"[VERIFY] Token has JWT expiry claim: {token_expiry} (current time: {now})")
+        logger.debug(f"[VERIFY] Token has JWT expiry claim: {token_expiry} (current time: {now})")
         if now >= token_expiry:
             logger.warning("[VERIFY] ✗ Token has expired (JWT exp claim)")
             # Remove from cache if present
             _token_cache.pop(token_hash, None)
             return None
     else:
-        logger.info("[VERIFY] Token is opaque/JWE (no JWT exp claim)")
+        logger.debug("[VERIFY] Token is opaque/JWE (no JWT exp claim)")
 
     # Check cache
     if token_hash in _token_cache:
         user_info, expiry = _token_cache[token_hash]
         if now < expiry:
-            logger.info(f"[VERIFY] ✓ Token validated from cache. User: {user_info.get('email', user_info.get('sub', 'unknown'))}")
+            logger.debug(f"[VERIFY] ✓ Token validated from cache. User: {user_info.get('email', user_info.get('sub', 'unknown'))}")
             return user_info
         else:
             # Expired - remove from cache
-            logger.info("[VERIFY] Cached token expired, re-validating with Auth0")
+            logger.debug("[VERIFY] Cached token expired, re-validating with Auth0")
             del _token_cache[token_hash]
 
     try:
@@ -147,7 +147,7 @@ async def verify_oauth_token(token: str) -> Optional[dict]:
         # Auth0 must validate the token before returning user info,
         # making this an indirect token validation mechanism
         userinfo_url = f"https://{AUTH0_DOMAIN}/userinfo"
-        logger.info(f"[VERIFY] Calling Auth0 /userinfo endpoint: {userinfo_url}")
+        logger.debug(f"[VERIFY] Calling Auth0 /userinfo endpoint: {userinfo_url}")
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -156,11 +156,11 @@ async def verify_oauth_token(token: str) -> Optional[dict]:
                 timeout=5.0
             )
 
-            logger.info(f"[VERIFY] Auth0 /userinfo response status: {response.status_code}")
+            logger.debug(f"[VERIFY] Auth0 /userinfo response status: {response.status_code}")
 
             if response.status_code != 200:
                 logger.warning(f"[VERIFY] ✗ Token validation via /userinfo failed with status {response.status_code}")
-                logger.warning(f"[VERIFY] Response body: {response.text}")
+                logger.debug(f"[VERIFY] Response body: {response.text}")
                 return None
 
             # Successfully retrieved user info - token is valid
@@ -333,20 +333,20 @@ async def auth_middleware(request: Request, call_next):
 
         # Detailed logging for token debugging
         auth_header = request.headers.get("Authorization", "")
-        logger.info(f"[AUTH] Request to {request.url.path} from {request.client.host}")
-        logger.info(f"[AUTH] Authorization header present: {bool(auth_header)}")
+        logger.debug(f"[AUTH] Request to {request.url.path} from {request.client.host}")
+        logger.debug(f"[AUTH] Authorization header present: {bool(auth_header)}")
 
         if auth_header:
             # Show header format (redacted)
             header_prefix = auth_header[:20] + "..." if len(auth_header) > 20 else auth_header
-            logger.info(f"[AUTH] Authorization header format: {header_prefix}")
-            logger.info(f"[AUTH] Header starts with 'Bearer ': {auth_header.startswith('Bearer ')}")
+            logger.debug(f"[AUTH] Authorization header format: {header_prefix}")
+            logger.debug(f"[AUTH] Header starts with 'Bearer ': {auth_header.startswith('Bearer ')}")
 
         token = auth_header.replace("Bearer ", "").strip()
 
         if not token:
             logger.warning("[AUTH] ✗ No authorization token provided")
-            logger.warning(f"[AUTH] Full header value (empty?): '{auth_header}'")
+            logger.debug(f"[AUTH] Full header value (empty?): '{auth_header}'")
             # Return 401 with WWW-Authenticate header to trigger OAuth flow
             return Response(
                 status_code=401,
@@ -357,9 +357,9 @@ async def auth_middleware(request: Request, call_next):
             )
 
         # Verify OAuth token
-        logger.info(f"[AUTH] Validating OAuth token for request from {request.client.host}")
-        logger.info(f"[AUTH] Token length: {len(token)} chars")
-        logger.info(f"[AUTH] Token preview (first 50 chars): {token[:50]}...")
+        logger.debug(f"[AUTH] Validating OAuth token for request from {request.client.host}")
+        logger.debug(f"[AUTH] Token length: {len(token)} chars")
+        logger.debug(f"[AUTH] Token preview (first 50 chars): {token[:50]}...")
 
         payload = await verify_oauth_token(token)
 
@@ -375,7 +375,7 @@ async def auth_middleware(request: Request, call_next):
 
         # Successfully authenticated
         email = payload.get("email", "unknown")
-        logger.info(f"[AUTH] ✓ OAuth authenticated successfully: {email}")
+        logger.info(f"[AUTH] ✓ OAuth authenticated: {email}")
         return await call_next(request)
 
     return await call_next(request)
