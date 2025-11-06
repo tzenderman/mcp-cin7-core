@@ -266,6 +266,8 @@ async def oauth_server_metadata():
         "token_endpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
         # REMOVED: registration_endpoint - forces clients to use configured client_id
         # instead of dynamically registering new applications
+        "client_id": AUTH0_CLIENT_ID,  # Claude Desktop needs this to know which client to use
+        "audience": AUTH0_AUDIENCE if AUTH0_AUDIENCE else None,  # Required for Auth0 API tokens
         "scopes_supported": ["openid", "profile", "email", "offline_access"],
         "response_types_supported": ["code"],
     }
