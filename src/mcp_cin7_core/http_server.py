@@ -264,12 +264,14 @@ async def oauth_server_metadata():
         "issuer": f"https://{AUTH0_DOMAIN}/",
         "authorization_endpoint": f"https://{AUTH0_DOMAIN}/authorize",
         "token_endpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
+        "jwks_uri": f"https://{AUTH0_DOMAIN}/.well-known/jwks.json",
         # REMOVED: registration_endpoint - forces clients to use configured client_id
         # instead of dynamically registering new applications
         "client_id": AUTH0_CLIENT_ID,  # Claude Desktop needs this to know which client to use
         "audience": AUTH0_AUDIENCE if AUTH0_AUDIENCE else None,  # Required for Auth0 API tokens
         "scopes_supported": ["openid", "profile", "email", "offline_access"],
         "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
     }
     return metadata
 
@@ -284,7 +286,7 @@ async def oauth_resource_metadata():
     return {
         "resource": MCP_SERVER_URL,
         "scopes_supported": ["openid", "profile", "email", "offline_access"],
-        "authorization_server": f"https://{AUTH0_DOMAIN}/",  # Must match issuer URL exactly (with trailing slash)
+        "authorization_servers": [f"https://{AUTH0_DOMAIN}/"],  # Must match issuer URL exactly (with trailing slash)
         # REMOVED: registration_endpoint - forces clients to use configured client_id
     }
 
@@ -350,7 +352,7 @@ async def auth_middleware(request: Request, call_next):
                 status_code=401,
                 content="Unauthorized - No token",
                 headers={
-                    "WWW-Authenticate": f'Bearer realm="{MCP_SERVER_URL}"'
+                    "WWW-Authenticate": f'Bearer, resource_metadata_uri="{MCP_SERVER_URL}/.well-known/oauth-protected-resource/mcp"'
                 }
             )
 
@@ -367,7 +369,7 @@ async def auth_middleware(request: Request, call_next):
                 status_code=401,
                 content="Unauthorized",
                 headers={
-                    "WWW-Authenticate": f'Bearer realm="{MCP_SERVER_URL}", error="invalid_token"'
+                    "WWW-Authenticate": f'Bearer, error="invalid_token", error_description="The access token is invalid or has expired."'
                 }
             )
 
