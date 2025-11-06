@@ -312,7 +312,15 @@ async def log_requests(request: Request, call_next):  # noqa: D401
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Skip auth for health check, OAuth discovery, and CORS preflight
-    if request.url.path in ["/health", "/.well-known/mcp-oauth"] or request.method == "OPTIONS":
+    public_paths = [
+        "/health",
+        "/.well-known/mcp-oauth",
+        "/.well-known/oauth-authorization-server",
+        "/.well-known/oauth-authorization-server/mcp",
+        "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-protected-resource/mcp"
+    ]
+    if request.url.path in public_paths or request.method == "OPTIONS":
         return await call_next(request)
 
     # Require OAuth for /mcp endpoints
