@@ -337,7 +337,14 @@ async def auth_middleware(request: Request, call_next):
         if not token:
             logger.warning("[AUTH] ✗ No authorization token provided")
             logger.warning(f"[AUTH] Full header value (empty?): '{auth_header}'")
-            return Response(status_code=401, content="Unauthorized - No token")
+            # Return 401 with WWW-Authenticate header to trigger OAuth flow
+            return Response(
+                status_code=401,
+                content="Unauthorized - No token",
+                headers={
+                    "WWW-Authenticate": f'Bearer realm="{MCP_SERVER_URL}"'
+                }
+            )
 
         # Verify OAuth token
         logger.info(f"[AUTH] Validating OAuth token for request from {request.client.host}")
@@ -348,7 +355,13 @@ async def auth_middleware(request: Request, call_next):
 
         if not payload:
             logger.warning(f"[AUTH] ✗ OAuth token validation FAILED from {request.client.host}")
-            return Response(status_code=401, content="Unauthorized")
+            return Response(
+                status_code=401,
+                content="Unauthorized",
+                headers={
+                    "WWW-Authenticate": f'Bearer realm="{MCP_SERVER_URL}", error="invalid_token"'
+                }
+            )
 
         # Successfully authenticated
         email = payload.get("email", "unknown")
