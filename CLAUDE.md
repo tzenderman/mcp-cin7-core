@@ -240,6 +240,30 @@ Use the snapshot workflow for catalogs with thousands of products:
 4. Continue fetching with `nextOffset` until `null`
 5. Clean up: `cin7_products_snapshot_close(snapshot_id="...")`
 
+### Creating a purchase order
+
+1. Read template: `cin7://templates/purchase_order` resource
+2. Get supplier info: `cin7_get_supplier(name="Supplier Name")` or by ID
+3. Get product info for line items: `cin7_get_product(sku="PRODUCT-SKU")` to retrieve ProductID, SKU, and Name
+4. Fill required PO-level fields:
+   - `Supplier` (supplier name or ID)
+   - `Location` (warehouse location)
+   - `OrderDate` (YYYY-MM-DD format)
+   - `Lines` (array of line items)
+5. Fill required fields for each line item:
+   - `ProductID` (GUID from cin7_get_product)
+   - `SKU` (product SKU)
+   - `Name` (product name)
+   - `Quantity` (order quantity, minimum 1)
+   - `Price` (unit price)
+   - `Tax` (tax amount)
+   - `TaxRule` (tax rule name, e.g., "Tax Exempt")
+   - `Total` (line total for validation: (Price × Quantity) - Discount + Tax)
+6. Create: `cin7_create_purchase_order(payload)`
+7. **Important**: All POs are automatically created with `Status="DRAFT"` to allow review before authorization
+8. User reviews and authorizes the PO in Cin7 Core web interface
+9. Use `create_purchase_order` prompt for step-by-step guidance
+
 ## MCP Protocol Reference
 
 ### Available MCP Tools
@@ -269,6 +293,11 @@ Use the snapshot workflow for catalogs with thousands of products:
 **Sales:**
 - `cin7_sales(page, limit, search, fields)` - List sales (returns Order, SaleOrderNumber, Customer, Location by default)
 
+**Purchase Orders:**
+- `cin7_purchase_orders(page, limit, search, fields)` - List purchase orders (returns TaskID, Supplier, Status, OrderDate, Location by default)
+- `cin7_get_purchase_order(purchase_order_id)` - Get single purchase order
+- `cin7_create_purchase_order(payload)` - Create new purchase order (always created as DRAFT status)
+
 ### Available MCP Resources
 
 **Product Templates:**
@@ -281,11 +310,16 @@ Use the snapshot workflow for catalogs with thousands of products:
 - `cin7://templates/supplier/{supplier_id}` - Existing supplier by ID
 - `cin7://templates/supplier/name/{name}` - Existing supplier by name
 
+**Purchase Order Templates:**
+- `cin7://templates/purchase_order` - Blank purchase order template
+- `cin7://templates/purchase_order/{purchase_order_id}` - Existing purchase order by ID
+
 ### Available MCP Prompts
 
 - `create_product` - Product creation workflow guide
-- `update_batch` - Batch update workflow guide  
+- `update_batch` - Batch update workflow guide
 - `verify_required_fields` - Required fields checklist
+- `create_purchase_order` - Purchase order creation workflow guide
 
 ## Cin7 Core API Reference
 
@@ -293,6 +327,7 @@ Use the snapshot workflow for catalogs with thousands of products:
 - Products: https://dearinventory.docs.apiary.io/#reference/product
 - Suppliers: https://dearinventory.docs.apiary.io/#reference/supplier
 - Sales: https://dearinventory.docs.apiary.io/#reference/sale
+- Purchase Orders: https://dearinventory.docs.apiary.io/#reference/purchase
 
 ## Development Notes
 

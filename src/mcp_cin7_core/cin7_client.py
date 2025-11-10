@@ -458,3 +458,108 @@ class Cin7Client:
             f"Sale list error: {response.status_code} {response.text[:200]}"
         )
 
+    async def list_purchase_orders(
+        self,
+        *,
+        page: int = 1,
+        limit: int = 100,
+        search: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List purchase orders with pagination and optional search filter.
+
+        Maps to GET Purchase endpoint.
+        Common params per docs: Page, Limit, Search.
+        Docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/get
+        """
+        params: Dict[str, Any] = {"Page": page, "Limit": limit}
+        if search:
+            params["Search"] = search
+        response = await self.client.get("Purchase", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+        if response.status_code == 200:
+            return data if isinstance(data, dict) else {"result": data}
+        raise Cin7ClientError(
+            f"Purchase Order list error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def get_purchase_order(
+        self,
+        *,
+        purchase_order_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch a single purchase order by ID.
+
+        Maps to GET Purchase endpoint with ID filter.
+        Docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/get
+        """
+        if not purchase_order_id:
+            raise Cin7ClientError("get_purchase_order requires purchase_order_id")
+
+        params: Dict[str, Any] = {"ID": purchase_order_id}
+        response = await self.client.get("Purchase", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            purchases = data.get("PurchaseList")
+            if isinstance(purchases, list) and purchases:
+                return purchases[0]
+            # Some responses might directly return the object; fall back to data
+            if data:
+                return data
+            raise Cin7ClientError("Purchase Order not found")
+
+        raise Cin7ClientError(
+            f"Purchase Order get error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def save_purchase_order(self, purchase_order: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new Purchase Order via POST Purchase.
+
+        Provide the full purchase order payload as required by Cin7 Core.
+        The Status field should be set to "DRAFT" to allow user review before authorization.
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/post
+        """
+        logger.debug("Cin7Client.save_purchase_order called with payload: %s", purchase_order)
+        logger.debug("Payload size: %d chars, keys: %s", len(str(purchase_order)), list(purchase_order.keys()) if isinstance(purchase_order, dict) else "NOT A DICT")
+
+        # Ensure Status is DRAFT for new purchase orders
+        if isinstance(purchase_order, dict) and "Status" not in purchase_order:
+            purchase_order["Status"] = "DRAFT"
+        elif isinstance(purchase_order, dict) and purchase_order.get("Status") != "DRAFT":
+            logger.warning("Purchase Order Status was %s, forcing to DRAFT", purchase_order.get("Status"))
+            purchase_order["Status"] = "DRAFT"
+
+        try:
+            response = await self.client.post("Purchase", json=purchase_order)
+            logger.debug("Cin7 API POST Purchase response status: %d", response.status_code)
+            logger.debug("Cin7 API response headers: %s", dict(response.headers))
+            logger.debug("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
+
+            try:
+                data = response.json()
+            except Exception as json_error:
+                logger.error("Failed to parse Cin7 response as JSON: %s", str(json_error))
+                data = {"raw": _truncate(response.text or "")}
+
+            if response.status_code in (200, 201):
+                logger.debug("Purchase Order save successful, returning data")
+                return data if isinstance(data, dict) else {"result": data}
+
+            error_msg = f"Purchase Order save error: {response.status_code} {response.text[:500]}"
+            logger.error("Purchase Order save failed: %s", error_msg)
+            logger.debug("Full response text: %s", response.text)
+            raise Cin7ClientError(error_msg)
+
+        except Cin7ClientError:
+            raise
+        except Exception as e:
+            logger.error("Unexpected error in save_purchase_order: %s", str(e), exc_info=True)
+            raise
+
