@@ -65,6 +65,33 @@ The server is deployed on Render and configured via `render.yaml`. Environment v
 
 Base URL: `https://mcp-cin7-core.onrender.com`
 
+## Local Development with Claude Desktop
+
+For local testing with Claude Desktop, use the stdio transport:
+
+```bash
+uv run python -m mcp_cin7_core.stdio_server
+```
+
+Configure in Claude Desktop's `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "cin7-core": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/mcp-cin7-core", "run", "python", "-m", "mcp_cin7_core.stdio_server"],
+      "env": {
+        "CIN7_ACCOUNT_ID": "your-account-id",
+        "CIN7_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+No OAuth configuration needed for local stdio transport. See [CLAUDE.md](CLAUDE.md) for detailed setup instructions.
+
 ## Testing the Server
 
 ### Health Check
