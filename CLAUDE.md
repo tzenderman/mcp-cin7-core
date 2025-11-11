@@ -97,6 +97,50 @@ The server provides:
   - Built-in session management
   - Full MCP protocol support (tools, resources, prompts)
 
+### Stdio Server (for Claude Desktop local testing)
+
+```bash
+# Run via Python module
+uv run python -m mcp_cin7_core.stdio_server
+```
+
+The stdio server provides the same MCP tools, resources, and prompts as the HTTP server, but uses stdio transport for direct integration with Claude Desktop.
+
+**Claude Desktop Configuration:**
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "cin7-core": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/absolute/path/to/mcp-cin7-core",
+        "run",
+        "python",
+        "-m",
+        "mcp_cin7_core.stdio_server"
+      ],
+      "env": {
+        "CIN7_ACCOUNT_ID": "your-account-id",
+        "CIN7_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+Replace `/absolute/path/to/mcp-cin7-core` with the actual path to your clone of this repository.
+
+**Environment Variables:**
+- Required: `CIN7_ACCOUNT_ID`, `CIN7_API_KEY`
+- Optional: `MCP_LOG_LEVEL`, `MCP_LOG_FILE`, `CIN7_BASE_URL`
+- Not needed: `AUTH0_*` (stdio uses Cin7 credentials directly, no OAuth)
+
+**Note:** The stdio server is intended for local development and testing only. For production deployments accessible via web, use the HTTP server with OAuth authentication.
+
 ### Testing MCP endpoints
 
 ```bash
