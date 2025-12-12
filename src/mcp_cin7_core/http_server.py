@@ -1,394 +1,360 @@
+"""HTTP transport entry point with ScaleKit OAuth 2.1 authentication."""
+
 from __future__ import annotations
 
-import os
-import logging
-import time
-import hashlib
 import json
-import base64
-from contextlib import asynccontextmanager
+import logging
+import os
 from typing import Optional
-from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-import httpx
 
-from .mcp_server import server as mcp_server
+import httpx
+from dotenv import load_dotenv
+from fastmcp.server.auth.providers.scalekit import ScalekitProvider
+from scalekit import ScalekitClient
+from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Route, Mount
+
+from .mcp_server import create_mcp_server
 
 load_dotenv()
 
-logger = logging.getLogger("mcp_cin7_core.http_server")
-
-# Token validation cache
-# Maps SHA256(token) -> (user_info, expiry_timestamp)
-# Note: Tokens are hashed before caching to prevent plaintext exposure
-_token_cache: dict[str, tuple[dict, float]] = {}
-TOKEN_CACHE_TTL = int(os.getenv("TOKEN_CACHE_TTL_SECONDS", "120"))  # 2 minutes default
-TOKEN_CACHE_MAX_SIZE = int(os.getenv("TOKEN_CACHE_MAX_SIZE", "1000"))  # Prevent unbounded growth
-
-# Create MCP streamable HTTP app first to initialize the session manager
-# The MCP SDK configures the endpoint at /mcp by default (streamable_http_path setting)
-mcp_app = mcp_server.streamable_http_app()
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage the lifespan of the FastAPI app and MCP session manager."""
-    # Start the MCP session manager
-    async with mcp_server.session_manager.run():
-        logger.info("MCP session manager started")
-        yield
-    logger.info("MCP session manager stopped")
-
-app = FastAPI(title="mcp-cin7-core", version="0.2.0", lifespan=lifespan)
-
-# Add CORS middleware for MCP Inspector and web clients
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["Mcp-Session-Id"],
+# Configure logging
+log_level = os.getenv("MCP_LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-# Auth0 OAuth Configuration
-AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
-AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID")
+logger = logging.getLogger("mcp_cin7_core.http_server")
 
-# MCP Server Base URL (for OAuth resource identifier)
-MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "https://mcp-cin7-core.onrender.com")
+# ScaleKit Configuration
+SCALEKIT_ENVIRONMENT_URL = os.getenv("SCALEKIT_ENVIRONMENT_URL")
+SCALEKIT_CLIENT_ID = os.getenv("SCALEKIT_CLIENT_ID", "")
+SCALEKIT_CLIENT_SECRET = os.getenv("SCALEKIT_CLIENT_SECRET", "")
+SCALEKIT_RESOURCE_ID = os.getenv("SCALEKIT_RESOURCE_ID")
+SCALEKIT_INTERCEPTOR_SECRET = os.getenv("SCALEKIT_INTERCEPTOR_SECRET", "")
+SERVER_URL = os.getenv("SERVER_URL", "https://mcp-cin7-core.onrender.com")
+
+# Email allowlist for interceptors (comma-separated)
+ALLOWED_EMAILS_RAW = os.getenv("ALLOWED_EMAILS", "")
+ALLOWED_EMAILS: set[str] = {
+    email.strip().lower()
+    for email in ALLOWED_EMAILS_RAW.split(",")
+    if email.strip()
+}
+
+# Initialize ScaleKit client for interceptor verification
+scalekit_client: ScalekitClient | None = None
+if SCALEKIT_ENVIRONMENT_URL and SCALEKIT_CLIENT_ID and SCALEKIT_CLIENT_SECRET:
+    scalekit_client = ScalekitClient(
+        SCALEKIT_ENVIRONMENT_URL,
+        SCALEKIT_CLIENT_ID,
+        SCALEKIT_CLIENT_SECRET,
+    )
 
 
-def _hash_token(token: str) -> str:
-    """Hash token using SHA256 to prevent plaintext storage in cache."""
-    return hashlib.sha256(token.encode()).hexdigest()
+def create_auth_provider() -> ScalekitProvider | None:
+    """Create ScaleKit auth provider if configured."""
+    required = [SCALEKIT_ENVIRONMENT_URL, SCALEKIT_RESOURCE_ID, SERVER_URL]
+    if not all(required):
+        logger.warning(
+            "ScaleKit OAuth not configured. Set SCALEKIT_ENVIRONMENT_URL, "
+            "SCALEKIT_RESOURCE_ID, and SERVER_URL environment variables."
+        )
+        return None
+
+    return ScalekitProvider(
+        environment_url=SCALEKIT_ENVIRONMENT_URL,
+        resource_id=SCALEKIT_RESOURCE_ID,
+        base_url=SERVER_URL,
+    )
 
 
-def _get_token_expiry(token: str) -> Optional[float]:
-    """Extract expiry timestamp from JWT token if possible.
-
-    Returns None if token is opaque (not JWT) or cannot be parsed.
-    JWE tokens (encrypted JWTs from Auth0) cannot be decoded without the key,
-    so this will return None for those.
+def is_email_allowed(email: str) -> bool:
+    """Check if an email is in the allowlist.
+    
+    If ALLOWED_EMAILS is not set or empty, all emails are allowed.
     """
-    try:
-        # JWT format: header.payload.signature
-        parts = token.split('.')
-        if len(parts) != 3:
-            return None
-
-        # Decode payload (add padding if needed)
-        payload_b64 = parts[1]
-        padding = '=' * (4 - len(payload_b64) % 4)
-        payload_json = base64.urlsafe_b64decode(payload_b64 + padding)
-        payload = json.loads(payload_json)
-
-        # Extract exp claim if present
-        exp = payload.get('exp')
-        if exp and isinstance(exp, (int, float)):
-            return float(exp)
-
-        return None
-    except Exception:
-        # Token is opaque or encrypted (JWE) - cannot parse
-        return None
+    if not ALLOWED_EMAILS:
+        return True
+    return email.lower() in ALLOWED_EMAILS
 
 
-async def verify_oauth_token(token: str) -> Optional[dict]:
-    """Verify Auth0 token using the /userinfo endpoint with caching.
-
-    Auth0 does not support RFC 7662 token introspection. For opaque/JWE tokens
-    (which Auth0 issues to dynamically registered clients like Claude Desktop),
-    the recommended validation approach is to call the /userinfo endpoint.
-
-    Security features:
-    - Tokens are hashed (SHA256) before caching to prevent plaintext exposure
-    - JWT expiry is checked if token is parseable
-    - Cache TTL is minimum of TOKEN_CACHE_TTL_SECONDS and JWT expiry
-    - Results cached for 2 minutes by default to avoid Auth0 rate limits
-
-    Reference: https://community.auth0.com/t/opaque-token-validation-with-introspection-endpoint/37553
+def verify_interceptor_signature(request: Request, body: bytes) -> bool:
+    """Verify the interceptor request signature from ScaleKit.
+    
+    Returns True if verification passes or if verification is not configured.
     """
-    if not AUTH0_DOMAIN:
-        logger.error("AUTH0_DOMAIN not configured")
-        return None
+    if not SCALEKIT_INTERCEPTOR_SECRET:
+        logger.warning("[INTERCEPTOR] No SCALEKIT_INTERCEPTOR_SECRET configured - skipping signature verification")
+        return True
 
-    # Hash token to prevent plaintext storage
-    token_hash = _hash_token(token)
+    if not scalekit_client:
+        logger.warning("[INTERCEPTOR] ScaleKit client not initialized - skipping signature verification")
+        return True
 
-    # Check if JWT has expired (if parseable)
-    token_expiry = _get_token_expiry(token)
-    now = time.time()
-
-    if token_expiry:
-        logger.debug(f"[VERIFY] Token has JWT expiry claim: {token_expiry} (current time: {now})")
-        if now >= token_expiry:
-            logger.warning("[VERIFY] ✗ Token has expired (JWT exp claim)")
-            # Remove from cache if present
-            _token_cache.pop(token_hash, None)
-            return None
-    else:
-        logger.debug("[VERIFY] Token is opaque/JWE (no JWT exp claim)")
-
-    # Check cache
-    if token_hash in _token_cache:
-        user_info, expiry = _token_cache[token_hash]
-        if now < expiry:
-            logger.debug(f"[VERIFY] ✓ Token validated from cache. User: {user_info.get('email', user_info.get('sub', 'unknown'))}")
-            return user_info
-        else:
-            # Expired - remove from cache
-            logger.debug("[VERIFY] Cached token expired, re-validating with Auth0")
-            del _token_cache[token_hash]
+    headers = {
+        'interceptor-id': request.headers.get('interceptor-id', ''),
+        'interceptor-signature': request.headers.get('interceptor-signature', ''),
+        'interceptor-timestamp': request.headers.get('interceptor-timestamp', ''),
+    }
 
     try:
-        # Use Auth0's /userinfo endpoint to validate the token
-        # Auth0 must validate the token before returning user info,
-        # making this an indirect token validation mechanism
-        userinfo_url = f"https://{AUTH0_DOMAIN}/userinfo"
-        logger.debug(f"[VERIFY] Calling Auth0 /userinfo endpoint: {userinfo_url}")
+        is_valid = scalekit_client.verify_interceptor_payload(
+            secret=SCALEKIT_INTERCEPTOR_SECRET,
+            headers=headers,
+            payload=body,
+        )
+        if not is_valid:
+            logger.warning("[INTERCEPTOR] Invalid signature")
+        return is_valid
+    except Exception as e:
+        logger.error(f"[INTERCEPTOR] Signature verification error: {e}")
+        return False
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                userinfo_url,
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=5.0
+
+async def handle_pre_signup(request: Request) -> JSONResponse:
+    """Handle ScaleKit PRE_SIGNUP interceptor.
+    
+    Checks if the user's email is in the allowlist before allowing signup.
+    """
+    try:
+        # Get raw body for signature verification
+        body = await request.body()
+
+        # Verify signature
+        if not verify_interceptor_signature(request, body):
+            return JSONResponse(
+                {"decision": "DENY", "error": {"message": "Invalid request signature"}},
+                status_code=401,
             )
 
-            logger.debug(f"[VERIFY] Auth0 /userinfo response status: {response.status_code}")
+        # Parse JSON body
+        data = json.loads(body)
 
-            if response.status_code != 200:
-                logger.warning(f"[VERIFY] ✗ Token validation via /userinfo failed with status {response.status_code}")
-                logger.debug(f"[VERIFY] Response body: {response.text}")
-                return None
+        # Extract email from interceptor context
+        user_email = data.get("interceptor_context", {}).get("user_email", "")
+        trigger_point = data.get("trigger_point", "")
 
-            # Successfully retrieved user info - token is valid
-            user_info = response.json()
-            logger.info(f"[VERIFY] ✓ Token validated via Auth0. User: {user_info.get('email', user_info.get('sub', 'unknown'))}")
+        logger.info(f"[INTERCEPTOR] {trigger_point} for email: {user_email}")
 
-            # Calculate cache expiry: minimum of cache TTL and token expiry
-            cache_expiry = now + TOKEN_CACHE_TTL
-            if token_expiry:
-                # Use the earlier of cache TTL or JWT expiry
-                expiry = min(cache_expiry, token_expiry)
-                ttl_used = int(expiry - now)
-                logger.debug(f"JWT expires at {token_expiry}, cache TTL is {TOKEN_CACHE_TTL}s, using {ttl_used}s")
-            else:
-                # Opaque/JWE token - use cache TTL only
-                expiry = cache_expiry
-                logger.debug(f"Opaque token (no exp claim), using cache TTL of {TOKEN_CACHE_TTL}s")
-
-            # Cache the result using hashed token as key
-            _token_cache[token_hash] = (user_info, expiry)
-
-            # Enforce cache size limit
-            if len(_token_cache) > TOKEN_CACHE_MAX_SIZE:
-                # First try removing expired entries
-                expired_tokens = [
-                    t for t, (_, exp) in _token_cache.items() if now >= exp
-                ]
-                for t in expired_tokens:
-                    del _token_cache[t]
-                logger.debug(f"Cleaned up {len(expired_tokens)} expired tokens from cache")
-
-                # If still over limit, remove oldest (lowest expiry)
-                if len(_token_cache) > TOKEN_CACHE_MAX_SIZE:
-                    sorted_tokens = sorted(_token_cache.items(), key=lambda x: x[1][1])
-                    tokens_to_remove = len(_token_cache) - TOKEN_CACHE_MAX_SIZE
-                    for t, _ in sorted_tokens[:tokens_to_remove]:
-                        del _token_cache[t]
-                    logger.debug(f"Evicted {tokens_to_remove} tokens to enforce cache size limit")
-
-            return user_info
+        if is_email_allowed(user_email):
+            logger.info(f"[INTERCEPTOR] ALLOW signup for: {user_email}")
+            return JSONResponse({"decision": "ALLOW"})
+        else:
+            logger.warning(f"[INTERCEPTOR] DENY signup for: {user_email} (not in allowlist)")
+            return JSONResponse({
+                "decision": "DENY",
+                "error": {"message": "Email not authorized for signup"}
+            })
 
     except Exception as e:
-        logger.error(f"OAuth verification error: {e}")
-        return None
-
-@app.get("/health")
-async def health():
-    """Health check endpoint with token cache statistics."""
-    now = time.time()
-    active_tokens = sum(1 for _, exp in _token_cache.values() if now < exp)
-
-    return {
-        "status": "ok",
-        "transport": "streamable-http",
-        "token_cache": {
-            "size": len(_token_cache),
-            "active": active_tokens,
-            "ttl_seconds": TOKEN_CACHE_TTL,
-            "max_size": TOKEN_CACHE_MAX_SIZE
-        }
-    }
+        logger.error(f"[INTERCEPTOR] Error processing PRE_SIGNUP: {e}")
+        # Fail closed - deny on error
+        return JSONResponse({
+            "decision": "DENY",
+            "error": {"message": "Internal error processing signup"}
+        })
 
 
-@app.get("/.well-known/mcp-oauth")
-async def oauth_discovery():
-    """OAuth discovery endpoint for MCP clients (Claude Desktop).
-
-    This endpoint allows Claude Desktop to auto-discover OAuth configuration
-    when adding the server as a remote connector.
+async def handle_pre_session_creation(request: Request) -> JSONResponse:
+    """Handle ScaleKit PRE_SESSION_CREATION interceptor.
+    
+    Checks if the user's email is in the allowlist before creating a session.
+    This blocks deleted/unauthorized users even if they have a valid token.
     """
-    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID:
-        return Response(
-            status_code=501,
-            content="OAuth not configured on this server"
+    try:
+        # Get raw body for signature verification
+        body = await request.body()
+
+        # Log the incoming request for debugging
+        logger.info(f"[INTERCEPTOR] PRE_SESSION_CREATION request received")
+        logger.debug(f"[INTERCEPTOR] Headers: {dict(request.headers)}")
+        logger.debug(f"[INTERCEPTOR] Body (first 500 chars): {body[:500]}")
+
+        # Verify signature
+        if not verify_interceptor_signature(request, body):
+            logger.warning("[INTERCEPTOR] Signature verification failed")
+            return JSONResponse(
+                {"decision": "DENY", "error": {"message": "Invalid request signature"}},
+                status_code=401,
+            )
+
+        # Parse JSON body
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            logger.error(f"[INTERCEPTOR] Invalid JSON: {e}")
+            return JSONResponse({
+                "decision": "DENY",
+                "error": {"message": "Invalid JSON payload"}
+            }, status_code=400)
+
+        # Extract email from interceptor context
+        user_email = data.get("interceptor_context", {}).get("user_email", "")
+        trigger_point = data.get("trigger_point", "")
+
+        logger.info(f"[INTERCEPTOR] {trigger_point} for email: {user_email}")
+        logger.debug(f"[INTERCEPTOR] Full payload: {json.dumps(data, indent=2)}")
+
+        if is_email_allowed(user_email):
+            logger.info(f"[INTERCEPTOR] ALLOW session for: {user_email}")
+            response = JSONResponse({"decision": "ALLOW"})
+            logger.debug(f"[INTERCEPTOR] Returning ALLOW response")
+            return response
+        else:
+            logger.warning(f"[INTERCEPTOR] DENY session for: {user_email} (not in allowlist)")
+            response = JSONResponse({
+                "decision": "DENY",
+                "error": {"message": "Email not authorized for access"}
+            })
+            logger.debug(f"[INTERCEPTOR] Returning DENY response: {response.body}")
+            return response
+
+    except Exception as e:
+        logger.error(f"[INTERCEPTOR] Error processing PRE_SESSION_CREATION: {e}", exc_info=True)
+        # Fail closed - deny on error
+        return JSONResponse({
+            "decision": "DENY",
+            "error": {"message": f"Internal error processing session: {str(e)}"}
+        })
+
+
+async def openid_configuration(request: Request) -> JSONResponse:
+    """Return OpenID Connect Discovery metadata.
+    
+    FastMCP's ScalekitProvider doesn't provide this endpoint, so we add it manually.
+    """
+    if not SCALEKIT_ENVIRONMENT_URL:
+        return JSONResponse(
+            {"error": "OAuth not configured"},
+            status_code=501
         )
 
-    return {
-        "authorizationEndpoint": f"https://{AUTH0_DOMAIN}/authorize",
-        "tokenEndpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
-        "clientId": AUTH0_CLIENT_ID,
-        "audience": AUTH0_AUDIENCE if AUTH0_AUDIENCE else None,
-        "scopes": ["openid", "profile", "email", "offline_access"]
-    }
+    # Fetch the actual metadata from ScaleKit (same as oauth-authorization-server)
+    # ScaleKit provides this at the resource-specific endpoint
+    if SCALEKIT_RESOURCE_ID:
+        # Try to get it from ScaleKit's resource endpoint
+        try:
+            async with httpx.AsyncClient() as client:
+                url = f"{SCALEKIT_ENVIRONMENT_URL}/.well-known/oauth-authorization-server/resources/{SCALEKIT_RESOURCE_ID}"
+                response = await client.get(url, timeout=5.0)
+                if response.status_code == 200:
+                    metadata = response.json()
+                    # Add OpenID Connect specific fields
+                    metadata["userinfo_endpoint"] = f"{SCALEKIT_ENVIRONMENT_URL}/userinfo"
+                    metadata["subject_types_supported"] = ["public"]
+                    metadata["id_token_signing_alg_values_supported"] = ["RS256"]
+                    return JSONResponse(metadata)
+        except Exception as e:
+            logger.warning(f"Failed to fetch from ScaleKit: {e}")
 
-# --------------------------------------------------------------------------- #
-# RFC 8414 / .well-known OAuth 2.0 metadata – required by some MCP clients
-# --------------------------------------------------------------------------- #
-
-@app.get("/.well-known/oauth-authorization-server")
-@app.get("/.well-known/oauth-authorization-server/mcp")
-async def oauth_server_metadata():
-    """Return OAuth 2.0 Authorization Server metadata.
-
-    Claude Desktop queries these endpoints before starting the OAuth flow.
-    We map them to our Auth0 tenant so the client can discover endpoints.
-    """
-    if not AUTH0_DOMAIN:
-        return Response(status_code=501, content="OAuth not configured on this server")
-
-    metadata = {
-        "issuer": f"https://{AUTH0_DOMAIN}/",
-        "authorization_endpoint": f"https://{AUTH0_DOMAIN}/authorize",
-        "token_endpoint": f"https://{AUTH0_DOMAIN}/oauth/token",
-        "jwks_uri": f"https://{AUTH0_DOMAIN}/.well-known/jwks.json",
-        # REMOVED: registration_endpoint - forces clients to use configured client_id
-        # instead of dynamically registering new applications
-        "client_id": AUTH0_CLIENT_ID,  # Claude Desktop needs this to know which client to use
-        "audience": AUTH0_AUDIENCE if AUTH0_AUDIENCE else None,  # Required for Auth0 API tokens
-        "scopes_supported": ["openid", "profile", "email", "offline_access"],
+    # Fallback: construct metadata manually
+    authorization_endpoint = f"{SCALEKIT_ENVIRONMENT_URL}/oauth/authorize"
+    token_endpoint = f"{SCALEKIT_ENVIRONMENT_URL}/oauth/token"
+    jwks_uri = f"{SCALEKIT_ENVIRONMENT_URL}/keys"
+    userinfo_endpoint = f"{SCALEKIT_ENVIRONMENT_URL}/userinfo"
+    
+    return JSONResponse({
+        "issuer": SCALEKIT_ENVIRONMENT_URL,
+        "authorization_endpoint": authorization_endpoint,
+        "token_endpoint": token_endpoint,
+        "jwks_uri": jwks_uri,
+        "userinfo_endpoint": userinfo_endpoint,
         "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code", "refresh_token"],
-    }
-    return metadata
+        "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
+        "scopes_supported": ["cin7:read", "cin7:write", "openid", "profile", "email"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["RS256"],
+    })
 
 
-@app.get("/.well-known/oauth-protected-resource")
-@app.get("/.well-known/oauth-protected-resource/mcp")
-async def oauth_resource_metadata():
-    """Return minimal OAuth 2.0 Resource Server metadata required by clients."""
-    if not AUTH0_DOMAIN:
-        return Response(status_code=501, content="OAuth not configured on this server")
-
-    return {
-        "resource": MCP_SERVER_URL,
-        "scopes_supported": ["openid", "profile", "email", "offline_access"],
-        "authorization_servers": [f"https://{AUTH0_DOMAIN}/"],  # Must match issuer URL exactly (with trailing slash)
-        # REMOVED: registration_endpoint - forces clients to use configured client_id
-    }
-
-# --------------------------------------------------------------------------- #
-# Verbose request logger – logs every request/response when MCP_LOG_LEVEL=DEBUG
-# This is placed BEFORE the auth middleware so we capture even unauthorized
-# attempts. Enable by setting the env var MCP_LOG_LEVEL=DEBUG on Render.
-# --------------------------------------------------------------------------- #
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):  # noqa: D401
-    """Log inbound and outbound HTTP traffic when logger is in DEBUG mode."""
-    if logger.isEnabledFor(logging.DEBUG):
-        headers = {k: v for k, v in request.headers.items()}
-        logger.debug("↘︎ %s %s headers=%s client=%s", request.method, request.url.path, headers, request.client.host)
-
-    response: Response = await call_next(request)
-
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug("↗︎ %s %s → %s", request.method, request.url.path, response.status_code)
-
-    return response
+async def health(request: Request) -> JSONResponse:
+    """Health check endpoint."""
+    return JSONResponse({
+        "status": "ok",
+        "transport": "streamable-http",
+        "oauth_provider": "scalekit" if auth_provider else "none",
+    })
 
 
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    # Skip auth for health check, OAuth discovery, and CORS preflight
-    public_paths = [
-        "/health",
-        "/.well-known/mcp-oauth",
-        "/.well-known/oauth-authorization-server",
-        "/.well-known/oauth-authorization-server/mcp",
-        "/.well-known/oauth-protected-resource",
-        "/.well-known/oauth-protected-resource/mcp"
+# Create auth provider and MCP server with auth
+auth_provider = create_auth_provider()
+mcp_server = create_mcp_server(auth=auth_provider)
+
+
+def create_app():
+    """Create ASGI app with CORS middleware and interceptor endpoints."""
+    # Get the underlying Starlette app from FastMCP
+    # FastMCP's ScalekitProvider automatically handles OAuth discovery endpoints
+    mcp_app = mcp_server.http_app()
+
+    # Define interceptor routes
+    interceptor_routes = [
+        Route("/auth/interceptors/pre-signup", handle_pre_signup, methods=["POST"]),
+        Route("/auth/interceptors/pre-session-creation", handle_pre_session_creation, methods=["POST"]),
     ]
-    if request.url.path in public_paths or request.method == "OPTIONS":
-        return await call_next(request)
 
-    # Require OAuth for /mcp endpoints
-    if request.url.path.startswith("/mcp"):
-        if not AUTH0_DOMAIN:
-            logger.error("AUTH0_DOMAIN not configured - OAuth required")
-            return Response(status_code=500, content="Server misconfigured")
+    # Create main app with interceptor routes and mount MCP app
+    # IMPORTANT: Must pass mcp_app.lifespan to initialize FastMCP's session manager
+    app = Starlette(
+        routes=[
+            Route("/health", health, methods=["GET"]),
+            Route("/.well-known/openid-configuration", openid_configuration, methods=["GET"]),
+            *interceptor_routes,
+            Mount("/", app=mcp_app),  # Mount MCP app at root (FastMCP handles /mcp endpoint)
+        ],
+        lifespan=mcp_app.lifespan,
+    )
 
-        # Detailed logging for token debugging
-        auth_header = request.headers.get("Authorization", "")
-        logger.debug(f"[AUTH] Request to {request.url.path} from {request.client.host}")
-        logger.debug(f"[AUTH] Authorization header present: {bool(auth_header)}")
+    # Add CORS middleware for MCP Inspector and browser clients
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
 
-        if auth_header:
-            # Show header format (redacted)
-            header_prefix = auth_header[:20] + "..." if len(auth_header) > 20 else auth_header
-            logger.debug(f"[AUTH] Authorization header format: {header_prefix}")
-            logger.debug(f"[AUTH] Header starts with 'Bearer ': {auth_header.startswith('Bearer ')}")
+    return app
 
-        token = auth_header.replace("Bearer ", "").strip()
 
-        if not token:
-            logger.warning("[AUTH] ✗ No authorization token provided")
-            logger.debug(f"[AUTH] Full header value (empty?): '{auth_header}'")
-            # Return 401 with WWW-Authenticate header to trigger OAuth flow
-            return Response(
-                status_code=401,
-                content="Unauthorized - No token",
-                headers={
-                    "WWW-Authenticate": f'Bearer, resource_metadata_uri="{MCP_SERVER_URL}/.well-known/oauth-protected-resource/mcp"'
-                }
-            )
-
-        # Verify OAuth token
-        logger.debug(f"[AUTH] Validating OAuth token for request from {request.client.host}")
-        logger.debug(f"[AUTH] Token length: {len(token)} chars")
-        logger.debug(f"[AUTH] Token preview (first 50 chars): {token[:50]}...")
-
-        payload = await verify_oauth_token(token)
-
-        if not payload:
-            logger.warning(f"[AUTH] ✗ OAuth token validation FAILED from {request.client.host}")
-            return Response(
-                status_code=401,
-                content="Unauthorized",
-                headers={
-                    "WWW-Authenticate": f'Bearer, error="invalid_token", error_description="The access token is invalid or has expired."'
-                }
-            )
-
-        # Successfully authenticated
-        email = payload.get("email", "unknown")
-        logger.info(f"[AUTH] ✓ OAuth authenticated: {email}")
-        return await call_next(request)
-
-    return await call_next(request)
-
-# Mount MCP app at root so the /mcp endpoint is accessible at /mcp
-app.mount("/", mcp_app)
+# Create the ASGI app for uvicorn
+app = create_app()
 
 
 def main() -> None:
-    """Entrypoint for MCP HTTP server."""
+    """Run MCP server with HTTP transport and ScaleKit OAuth."""
     import uvicorn
+
+    if not auth_provider:
+        logger.warning("Starting server WITHOUT OAuth authentication!")
+    else:
+        logger.info(f"ScaleKit environment: {SCALEKIT_ENVIRONMENT_URL}")
+        logger.info(f"ScaleKit resource ID: {SCALEKIT_RESOURCE_ID}")
+
+    if ALLOWED_EMAILS:
+        logger.info(f"Email allowlist configured with {len(ALLOWED_EMAILS)} email(s)")
+    else:
+        logger.warning("No ALLOWED_EMAILS configured - all emails permitted")
+
+    if not SCALEKIT_INTERCEPTOR_SECRET:
+        logger.warning("No SCALEKIT_INTERCEPTOR_SECRET configured - interceptor signatures will not be verified")
+
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    host = os.getenv("HOST", "0.0.0.0")
+
+    logger.info(f"Starting Cin7 Core MCP Server on {host}:{port}")
+    logger.info(f"Server URL: {SERVER_URL}")
+
+    # Run with uvicorn directly using the CORS-wrapped app
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":
