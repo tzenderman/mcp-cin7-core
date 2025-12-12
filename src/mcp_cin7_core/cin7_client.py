@@ -595,15 +595,17 @@ class Cin7Client:
         *,
         stock_transfer_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Fetch a single stock transfer by ID.
+        """Fetch a single stock transfer by TaskID.
 
-        Maps to GET StockTransfer endpoint with ID filter.
+        Maps to GET StockTransfer endpoint with TaskID query parameter.
+        The stock_transfer_id parameter should be the TaskID from the list response.
         Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer
         """
         if not stock_transfer_id:
             raise Cin7ClientError("get_stock_transfer requires stock_transfer_id")
 
-        params: Dict[str, Any] = {"ID": stock_transfer_id}
+        # StockTransfer endpoint expects TaskID as a query parameter
+        params: Dict[str, Any] = {"TaskID": stock_transfer_id}
         response = await self.client.get("StockTransfer", params=params)
         try:
             data = response.json()
@@ -618,6 +620,16 @@ class Cin7Client:
             if data:
                 return data
             raise Cin7ClientError("Stock Transfer not found")
+
+        # Handle 400 "not found" errors specifically
+        if response.status_code == 400:
+            # Check if the already-parsed data contains a "not found" error
+            if isinstance(data, list) and data:
+                error_obj = data[0]
+                if isinstance(error_obj, dict):
+                    exception_msg = error_obj.get("Exception", "")
+                    if exception_msg and "not found" in exception_msg.lower():
+                        raise Cin7ClientError("Stock Transfer not found")
 
         raise Cin7ClientError(
             f"Stock Transfer get error: {response.status_code} {response.text[:200]}"
