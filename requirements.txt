@@ -1,7 +1,0 @@
-mcp
-httpx
-python-dotenv
-pydantic
-fastapi
-uvicorn[standard]
-python-jose[cryptography]
