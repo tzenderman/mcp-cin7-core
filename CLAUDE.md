@@ -15,9 +15,6 @@ The project wraps the Cin7 Core API to enable AI-powered inventory management op
 ```bash
 # Create virtual environment and install dependencies (requires uv)
 uv venv
-uv pip install -r requirements.txt
-
-# Install package in editable mode for development
 uv pip install -e .
 ```
 
@@ -26,49 +23,75 @@ uv pip install -e .
 Copy `.env.example` to `.env` and configure:
 - `CIN7_ACCOUNT_ID` - Cin7 Core account identifier
 - `CIN7_API_KEY` - Cin7 Core API application key
-- `AUTH0_DOMAIN` - Auth0 tenant domain (e.g., `dev-abc123.us.auth0.com`)
-- `AUTH0_CLIENT_ID` - Auth0 application client ID
-- `AUTH0_CLIENT_SECRET` - Auth0 application client secret
-- `AUTH0_AUDIENCE` - Auth0 API audience
+- `SCALEKIT_ENVIRONMENT_URL` - ScaleKit environment URL (e.g., `https://yourapp.scalekit.com`)
+- `SCALEKIT_CLIENT_ID` - ScaleKit application client ID
+- `SCALEKIT_CLIENT_SECRET` - ScaleKit application client secret
+- `SCALEKIT_RESOURCE_ID` - ScaleKit resource identifier (e.g., `res_xxx`)
+- `SCALEKIT_INTERCEPTOR_SECRET` - Secret for verifying interceptor payloads (from ScaleKit Dashboard > Interceptors)
+- `ALLOWED_EMAILS` - Comma-separated list of allowed email addresses (leave empty to allow all)
+- `SERVER_URL` - Your MCP server's public URL (e.g., `https://mcp-cin7-core.onrender.com`)
 - `CIN7_BASE_URL` - (Optional) Defaults to `https://inventory.dearsystems.com/ExternalApi/v2/`
 - `MCP_LOG_LEVEL` - (Optional) Logging level (default: INFO)
-- `TOKEN_CACHE_TTL_SECONDS` - (Optional) Token validation cache TTL in seconds (default: 120 = 2 minutes)
-- `TOKEN_CACHE_MAX_SIZE` - (Optional) Maximum number of cached tokens (default: 1000)
 
 The server automatically searches for `.env` in the current directory, falling back to the project root if not found.
 
-**Token Caching & Security**: To prevent hitting Auth0's rate limits (10 requests/minute on `/userinfo`), the server caches token validation results with these security features:
-- Tokens are hashed (SHA256) before caching - never stored in plaintext
-- JWT expiry claims are validated if present
-- Cache TTL is the minimum of `TOKEN_CACHE_TTL_SECONDS` and JWT expiry
-- Default 2-minute cache window balances security (revocation delay) and performance
-- Cache statistics available at `/health` endpoint
+### ScaleKit Configuration
 
-### Auth0 Application Configuration
+Register your MCP server in the ScaleKit dashboard:
 
-To enable 30-day sessions and prevent daily logouts, configure your Auth0 application (the one whose `client_id` is in your `.env` file):
+1. **Navigate to MCP Servers > Add MCP Server**
+2. **Configure server settings:**
+   - Server name: `cin7-core`
+   - Resource identifier: Your server URL (e.g., `https://mcp-cin7-core.onrender.com`)
+   - Scopes: `cin7:read`, `cin7:write`
+3. **Enable dynamic client registration** (for MCP clients like Claude Desktop)
+4. **Copy your credentials** to `.env`:
+   - `SCALEKIT_ENVIRONMENT_URL`
+   - `SCALEKIT_CLIENT_ID`
+   - `SCALEKIT_CLIENT_SECRET`
+   - `SCALEKIT_RESOURCE_ID`
 
-**Required Settings in Auth0 Dashboard:**
+See: [ScaleKit MCP Quickstart](https://docs.scalekit.com/mcp/quickstart)
 
-1. **Application > Settings > Application URIs:**
-   - Add `https://claude.ai/api/mcp/auth_callback` to **Allowed Callback URLs**
-   - Add your server URL (e.g., `https://mcp-cin7-core.onrender.com`) to **Allowed Web Origins** if needed
+### Authentication Interceptors
 
-2. **Application > Settings > Advanced Settings > Grant Types:**
-   - ✅ Enable **Authorization Code**
-   - ✅ Enable **Refresh Token**
+The server implements ScaleKit authentication interceptors to enforce an email allowlist policy. Only users with emails in the `ALLOWED_EMAILS` list can sign up or create sessions.
 
-3. **Application > Settings > Advanced Settings > OAuth:**
-   - **Refresh Token Rotation**: Enable (toggle ON)
-   - **Refresh Token Expiration**: Set to `2592000` seconds (30 days)
-   - **Absolute Lifetime**: Enable (toggle ON)
+**Interceptor Endpoints:**
+- `POST /auth/interceptors/pre-signup` - Called before a user creates a new organization
+- `POST /auth/interceptors/pre-session-create` - Called before session tokens are issued
 
-**Why These Settings Matter:**
-- Without **Refresh Token Rotation** enabled, access tokens expire after 24 hours with no way to refresh
-- The `offline_access` scope (now included in all OAuth endpoints) requests refresh tokens
-- With these settings, Claude Desktop can automatically refresh tokens for 30 days without re-authentication
+**ScaleKit Dashboard Configuration:**
 
-**Important:** The server no longer advertises dynamic client registration. Claude Desktop will use your configured `AUTH0_CLIENT_ID` instead of creating new "Claude" third-party applications. Clean up any old dynamically registered "Claude" applications in your Auth0 dashboard if desired.
+1. Navigate to **Interceptors** tab in ScaleKit dashboard
+2. Create two interceptors:
+
+   **Pre-Signup Interceptor:**
+   - Name: `Email Allowlist - Pre-Signup`
+   - Trigger point: `PRE_SIGNUP`
+   - Endpoint: `https://your-server.com/auth/interceptors/pre-signup`
+   - Timeout: 5 seconds
+   - Fallback: Fail closed (deny if timeout)
+
+   **Pre-Session Creation Interceptor:**
+   - Name: `Email Allowlist - Pre-Session`
+   - Trigger point: `PRE_SESSION_CREATION`
+   - Endpoint: `https://your-server.com/auth/interceptors/pre-session-create`
+   - Timeout: 5 seconds
+   - Fallback: Fail closed (deny if timeout)
+
+3. Copy the **Interceptor Secret** from the dashboard and set it as `SCALEKIT_INTERCEPTOR_SECRET` in your `.env`
+4. Enable both interceptors
+
+**Email Allowlist:**
+
+Set `ALLOWED_EMAILS` in your `.env` file with a comma-separated list of authorized emails:
+
+```bash
+ALLOWED_EMAILS=alice@example.com,bob@example.com,admin@company.org
+```
+
+If `ALLOWED_EMAILS` is empty or not set, all authenticated users are allowed.
 
 ### Validation
 
@@ -91,8 +114,8 @@ uv run python -m mcp_cin7_core.http_server
 
 The server provides:
 - **Health endpoint**: `GET /health` (no auth required)
-- **OAuth discovery**: `GET /.well-known/mcp-oauth` (no auth required)
-- **MCP endpoint**: `/mcp` (requires OAuth 2.0 authentication via Auth0)
+- **OAuth discovery**: `GET /.well-known/oauth-protected-resource` (no auth required)
+- **MCP endpoint**: `/mcp` (requires OAuth 2.0 authentication via ScaleKit)
   - Supports both batch (JSON) and streaming (SSE) responses
   - Built-in session management
   - Full MCP protocol support (tools, resources, prompts)
@@ -137,7 +160,7 @@ Replace `/absolute/path/to/mcp-cin7-core` with the actual path to your clone of 
 **Environment Variables:**
 - Required: `CIN7_ACCOUNT_ID`, `CIN7_API_KEY`
 - Optional: `MCP_LOG_LEVEL`, `MCP_LOG_FILE`, `CIN7_BASE_URL`
-- Not needed: `AUTH0_*` (stdio uses Cin7 credentials directly, no OAuth)
+- Not needed: `SCALEKIT_*` (stdio uses Cin7 credentials directly, no OAuth)
 
 **Note:** The stdio server is intended for local development and testing only. For production deployments accessible via web, use the HTTP server with OAuth authentication.
 
@@ -148,9 +171,14 @@ Replace `/absolute/path/to/mcp-cin7-core` with the actual path to your clone of 
 curl http://localhost:8000/health
 
 # Test OAuth discovery (no auth required)
-curl http://localhost:8000/.well-known/mcp-oauth
+curl http://localhost:8000/.well-known/oauth-protected-resource
 
-# For full MCP protocol testing, use MCP Inspector
+# Test without auth (expect 401 with WWW-Authenticate header)
+curl -i http://localhost:8000/mcp -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+
+# For full MCP protocol testing with OAuth flow, use MCP Inspector
 npx @modelcontextprotocol/inspector http://localhost:8000/mcp
 ```
 
