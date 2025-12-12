@@ -563,3 +563,63 @@ class Cin7Client:
             logger.error("Unexpected error in save_purchase_order: %s", str(e), exc_info=True)
             raise
 
+    async def list_stock_transfers(
+        self,
+        *,
+        page: int = 1,
+        limit: int = 100,
+        search: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List stock transfers with pagination and optional search filter.
+
+        Maps to GET StockTransferList endpoint.
+        Common params per docs: Page, Limit, Search.
+        Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer-list
+        """
+        params: Dict[str, Any] = {"Page": page, "Limit": limit}
+        if search:
+            params["Search"] = search
+        response = await self.client.get("StockTransferList", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+        if response.status_code == 200:
+            return data if isinstance(data, dict) else {"result": data}
+        raise Cin7ClientError(
+            f"Stock Transfer list error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def get_stock_transfer(
+        self,
+        *,
+        stock_transfer_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch a single stock transfer by ID.
+
+        Maps to GET StockTransfer endpoint with ID filter.
+        Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer
+        """
+        if not stock_transfer_id:
+            raise Cin7ClientError("get_stock_transfer requires stock_transfer_id")
+
+        params: Dict[str, Any] = {"ID": stock_transfer_id}
+        response = await self.client.get("StockTransfer", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            stock_transfers = data.get("StockTransferList")
+            if isinstance(stock_transfers, list) and stock_transfers:
+                return stock_transfers[0]
+            # Some responses might directly return the object; fall back to data
+            if data:
+                return data
+            raise Cin7ClientError("Stock Transfer not found")
+
+        raise Cin7ClientError(
+            f"Stock Transfer get error: {response.status_code} {response.text[:200]}"
+        )
+
