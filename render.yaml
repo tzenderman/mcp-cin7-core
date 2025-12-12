@@ -17,7 +17,7 @@ services:
         value: ozd2PsYq31cNuRtsVL8yWyfOVlFPrHxp
       - key: AUTH0_AUDIENCE
         value: https://mcp-cin7-core.onrender.com
-      - key: MCP_SERVER_URL
+      - key: SERVER_URL
         value: https://mcp-cin7-core.onrender.com
       # Default configuration values
       - key: CIN7_BASE_URL
