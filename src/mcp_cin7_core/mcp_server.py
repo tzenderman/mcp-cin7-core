@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from .cin7_client import Cin7Client, Cin7ClientError
 
@@ -53,7 +53,54 @@ def _truncate(text: str, max_len: int = 2000) -> str:
         return text
     return text[:max_len] + "... [truncated]"
 
-server = FastMCP("mcp-cin7-core")
+
+def create_mcp_server(auth=None):
+    """Create and configure the FastMCP server with all tools, resources, and prompts.
+    
+    Args:
+        auth: Optional auth provider (e.g., ScalekitProvider) for OAuth
+    """
+    server = FastMCP("mcp-cin7-core", auth=auth)
+    
+    # Register all tools
+    server.tool()(cin7_status)
+    server.tool()(cin7_me)
+    server.tool()(cin7_products_snapshot_start)
+    server.tool()(cin7_products_snapshot_chunk)
+    server.tool()(cin7_products_snapshot_close)
+    server.tool()(cin7_products)
+    server.tool()(cin7_products_snapshot_status)
+    server.tool()(cin7_get_product)
+    server.tool()(cin7_create_product)
+    server.tool()(cin7_update_product)
+    server.tool()(cin7_suppliers)
+    server.tool()(cin7_get_supplier)
+    server.tool()(cin7_create_supplier)
+    server.tool()(cin7_update_supplier)
+    server.tool()(cin7_sales)
+    server.tool()(cin7_purchase_orders)
+    server.tool()(cin7_get_purchase_order)
+    server.tool()(cin7_create_purchase_order)
+    server.tool()(cin7_stock_transfers)
+    server.tool()(cin7_get_stock_transfer)
+    
+    # Register all resources
+    server.resource("cin7://templates/product")(resource_product_template)
+    server.resource("cin7://templates/product/{product_id}")(resource_product_by_id)
+    server.resource("cin7://templates/product/sku/{sku}")(resource_product_by_sku)
+    server.resource("cin7://templates/supplier")(resource_supplier_template)
+    server.resource("cin7://templates/supplier/{supplier_id}")(resource_supplier_by_id)
+    server.resource("cin7://templates/supplier/name/{name}")(resource_supplier_by_name)
+    server.resource("cin7://templates/purchase_order")(resource_purchase_order_template)
+    server.resource("cin7://templates/purchase_order/{purchase_order_id}")(resource_purchase_order_by_id)
+    
+    # Register all prompts
+    server.prompt()(create_product)
+    server.prompt()(update_batch)
+    server.prompt()(verify_required_fields)
+    server.prompt()(create_purchase_order)
+    
+    return server
 # ----------------------------- Snapshot storage -----------------------------
 
 SNAPSHOT_TTL_SECONDS = 15 * 60
@@ -149,7 +196,6 @@ async def _build_snapshot(sid: str, page: int, limit: int, name: Optional[str], 
 
 
 
-@server.tool()
 async def cin7_status() -> Dict[str, Any]:
     """Verify Cin7 Core credentials by fetching a minimal page of products."""
     logger.debug("Tool call: cin7_status()")
@@ -162,7 +208,6 @@ async def cin7_status() -> Dict[str, Any]:
         await client.aclose()
 
 
-@server.tool()
 async def cin7_me() -> Dict[str, Any]:
     """Call Cin7 Core Me endpoint to verify identity and account context."""
     logger.debug("Tool call: cin7_me()")
@@ -175,7 +220,6 @@ async def cin7_me() -> Dict[str, Any]:
         await client.aclose()
 
 
-@server.tool()
 async def cin7_products_snapshot_start(
     page: int = 1,
     limit: int = 100,
@@ -217,7 +261,6 @@ async def cin7_products_snapshot_start(
         "total": snap.total,
     }
 
-@server.tool()
 async def cin7_products_snapshot_chunk(
     snapshot_id: str,
     offset: int = 0,
@@ -243,7 +286,6 @@ async def cin7_products_snapshot_chunk(
         "nextOffset": next_offset,
     }
 
-@server.tool()
 async def cin7_products_snapshot_close(snapshot_id: str) -> Dict[str, Any]:
     """Close and clean up a snapshot, cancelling work if still running."""
     snap = _snapshots.pop(snapshot_id, None)
@@ -252,7 +294,6 @@ async def cin7_products_snapshot_close(snapshot_id: str) -> Dict[str, Any]:
         task.cancel()
     return {"ok": True, "snapshotId": snapshot_id, "existed": snap is not None}
 
-@server.tool()
 async def cin7_products(
     page: int = 1,
     limit: int = 100,
@@ -311,7 +352,6 @@ async def cin7_products(
         await client.aclose()
 
 
-@server.tool()
 async def cin7_products_snapshot_status(snapshot_id: str) -> Dict[str, Any]:
     """Get status and metadata for a running or completed snapshot."""
     _cleanup_expired_snapshots()
@@ -326,7 +366,6 @@ async def cin7_products_snapshot_status(snapshot_id: str) -> Dict[str, Any]:
         "params": snap.params,
     }
 
-@server.tool()
 async def cin7_get_product(
     product_id: int | None = None,
     sku: str | None = None,
@@ -348,7 +387,6 @@ async def cin7_get_product(
     finally:
         await client.aclose()
 
-@server.tool()
 async def cin7_create_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new Cin7 Core product via POST Product.
 
@@ -376,7 +414,6 @@ async def cin7_create_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     finally:
         await client.aclose()
 
-@server.tool()
 async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Update a Cin7 Core product via PUT Product.
 
@@ -396,7 +433,6 @@ async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 # ----------------------------- Supplier Tools -----------------------------
 
-@server.tool()
 async def cin7_suppliers(
     page: int = 1,
     limit: int = 100,
@@ -424,7 +460,6 @@ async def cin7_suppliers(
         await client.aclose()
 
 
-@server.tool()
 async def cin7_get_supplier(
     supplier_id: str | None = None,
     name: str | None = None,
@@ -447,7 +482,6 @@ async def cin7_get_supplier(
         await client.aclose()
 
 
-@server.tool()
 async def cin7_create_supplier(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new Cin7 Core supplier via POST Supplier.
 
@@ -476,7 +510,6 @@ async def cin7_create_supplier(payload: Dict[str, Any]) -> Dict[str, Any]:
         await client.aclose()
 
 
-@server.tool()
 async def cin7_update_supplier(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Update a Cin7 Core supplier via PUT Supplier.
 
@@ -497,7 +530,6 @@ async def cin7_update_supplier(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 # ----------------------------- Sale Tools -----------------------------
 
-@server.tool()
 async def cin7_sales(
     page: int = 1,
     limit: int = 100,
@@ -565,7 +597,6 @@ async def cin7_sales(
 
 # ----------------------------- Purchase Order Tools -----------------------------
 
-@server.tool()
 async def cin7_purchase_orders(
     page: int = 1,
     limit: int = 100,
@@ -626,7 +657,6 @@ async def cin7_purchase_orders(
         await client.aclose()
 
 
-@server.tool()
 async def cin7_get_purchase_order(
     purchase_order_id: str,
 ) -> Dict[str, Any]:
@@ -647,7 +677,6 @@ async def cin7_get_purchase_order(
         await client.aclose()
 
 
-@server.tool()
 async def cin7_create_purchase_order(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new Cin7 Core purchase order via POST Purchase.
 
@@ -693,9 +722,92 @@ async def cin7_create_purchase_order(payload: Dict[str, Any]) -> Dict[str, Any]:
         await client.aclose()
 
 
+# ----------------------------- Stock Transfer Tools -----------------------------
+
+async def cin7_stock_transfers(
+    page: int = 1,
+    limit: int = 100,
+    search: str | None = None,
+    fields: list[str] | None = None,
+) -> Dict[str, Any]:
+    """List stock transfers with pagination and optional search filter.
+
+    Returns summarized stock transfer data with key fields by default.
+    Use 'fields' parameter to request additional fields beyond the defaults.
+
+    Parameters:
+    - page: Page number (1-based)
+    - limit: Items per page (Cin7 limits apply)
+    - search: Optional search term
+    - fields: Optional list of additional field names to include per stock transfer
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer-list
+    """
+    logger.debug(
+        "Tool call: cin7_stock_transfers(page=%s, limit=%s, search=%s)",
+        page,
+        limit,
+        search,
+    )
+    client = Cin7Client.from_env()
+    try:
+        result = await client.list_stock_transfers(page=page, limit=limit, search=search)
+
+        # Project returned stock transfers to summary fields plus any explicitly requested fields
+        try:
+            base_fields = {"TaskID", "FromLocation", "ToLocation", "Status", "TransferDate"}
+            requested_fields = set(fields or [])
+            allowed_fields = base_fields | requested_fields
+
+            def _project_list(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+                projected: list[dict[str, Any]] = []
+                for item in items:
+                    if isinstance(item, dict):
+                        projected.append({k: v for k, v in item.items() if k in allowed_fields})
+                    else:
+                        projected.append(item)
+                return projected
+
+            if isinstance(result, dict):
+                stock_transfers = result.get("StockTransferList")
+                if isinstance(stock_transfers, list):
+                    result["StockTransferList"] = _project_list(stock_transfers)
+                elif isinstance(result.get("result"), list):
+                    result["result"] = _project_list(result["result"])
+        except Exception:
+            # If projection fails for any reason, return the original result
+            pass
+
+        logger.debug("Tool result: cin7_stock_transfers -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+
+async def cin7_get_stock_transfer(
+    stock_transfer_id: str,
+) -> Dict[str, Any]:
+    """Get a single stock transfer by ID.
+
+    Returns the complete stock transfer object.
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer
+    """
+    logger.debug(
+        "Tool call: cin7_get_stock_transfer(stock_transfer_id=%s)",
+        stock_transfer_id,
+    )
+    client = Cin7Client.from_env()
+    try:
+        result = await client.get_stock_transfer(stock_transfer_id=stock_transfer_id)
+        logger.debug("Tool result: cin7_get_stock_transfer -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+
 # ----------------------------- Product Template Resources -----------------------------
 
-@server.resource("cin7://templates/product")
 async def resource_product_template() -> str:
     """Blank product template with all available fields and required field indicators.
 
@@ -725,7 +837,6 @@ async def resource_product_template() -> str:
     return json.dumps(template, indent=2)
 
 
-@server.resource("cin7://templates/product/{product_id}")
 async def resource_product_by_id(product_id: str) -> str:
     """Get existing product as template for updates.
 
@@ -741,7 +852,6 @@ async def resource_product_by_id(product_id: str) -> str:
         await client.aclose()
 
 
-@server.resource("cin7://templates/product/sku/{sku}")
 async def resource_product_by_sku(sku: str) -> str:
     """Get existing product by SKU as template for updates.
 
@@ -759,7 +869,6 @@ async def resource_product_by_sku(sku: str) -> str:
 
 # ----------------------------- Supplier Template Resources -----------------------------
 
-@server.resource("cin7://templates/supplier")
 async def resource_supplier_template() -> str:
     """Blank supplier template with all available fields.
 
@@ -787,7 +896,6 @@ async def resource_supplier_template() -> str:
     return json.dumps(template, indent=2)
 
 
-@server.resource("cin7://templates/supplier/{supplier_id}")
 async def resource_supplier_by_id(supplier_id: str) -> str:
     """Get existing supplier as template for updates."""
     logger.debug("Resource call: resource_supplier_by_id(supplier_id=%s)", supplier_id)
@@ -800,7 +908,6 @@ async def resource_supplier_by_id(supplier_id: str) -> str:
         await client.aclose()
 
 
-@server.resource("cin7://templates/supplier/name/{name}")
 async def resource_supplier_by_name(name: str) -> str:
     """Get existing supplier by name as template for updates."""
     logger.debug("Resource call: resource_supplier_by_name(name=%s)", name)
@@ -815,7 +922,6 @@ async def resource_supplier_by_name(name: str) -> str:
 
 # ----------------------------- Purchase Order Template Resources -----------------------------
 
-@server.resource("cin7://templates/purchase_order")
 async def resource_purchase_order_template() -> str:
     """Blank purchase order template with all available fields.
 
@@ -863,7 +969,6 @@ async def resource_purchase_order_template() -> str:
     return json.dumps(template, indent=2)
 
 
-@server.resource("cin7://templates/purchase_order/{purchase_order_id}")
 async def resource_purchase_order_by_id(purchase_order_id: str) -> str:
     """Get existing purchase order as template for review or updates.
 
@@ -881,7 +986,6 @@ async def resource_purchase_order_by_id(purchase_order_id: str) -> str:
 
 # ----------------------------- Workflow Prompts -----------------------------
 
-@server.prompt()
 async def create_product() -> str:
     """Guide for creating a Cin7 Core product with all required fields."""
     return """Create a product in Cin7 Core:
@@ -915,7 +1019,6 @@ async def create_product() -> str:
 """
 
 
-@server.prompt()
 async def update_batch() -> str:
     """Guide for batch updating products with error collection."""
     return """Batch update products in Cin7 Core:
@@ -941,7 +1044,6 @@ Error handling: Collect all errors, continue processing, report at end.
 """
 
 
-@server.prompt()
 async def verify_required_fields() -> str:
     """Check product data completeness before creation/update."""
     return """Verify product has required Cin7 Core fields:
@@ -965,7 +1067,6 @@ Report any missing or empty required fields before proceeding.
 """
 
 
-@server.prompt()
 async def create_purchase_order() -> str:
     """Guide for creating a Cin7 Core purchase order."""
     return """Create a purchase order in Cin7 Core:
@@ -1026,5 +1127,9 @@ Example workflow:
 - Submit with cin7_create_purchase_order
 - PO will be created as DRAFT for user review
 """
+
+
+# Create default server instance for backward compatibility
+server = create_mcp_server()
 
 
