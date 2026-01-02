@@ -440,14 +440,14 @@ class Cin7Client:
     ) -> Dict[str, Any]:
         """List sales with pagination and optional search filter.
 
-        Maps to GET Sale/List endpoint.
+        Maps to GET SaleList endpoint.
         Common params per docs: Page, Limit, Search.
-        Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale-list/get
+        Docs: https://help.core.cin7.com/hc/en-us/articles/9034555593871-SaleList
         """
         params: Dict[str, Any] = {"Page": page, "Limit": limit}
         if search:
             params["Search"] = search
-        response = await self.client.get("Sale/List", params=params)
+        response = await self.client.get("SaleList", params=params)
         try:
             data = response.json()
         except Exception:
@@ -467,14 +467,14 @@ class Cin7Client:
     ) -> Dict[str, Any]:
         """List purchase orders with pagination and optional search filter.
 
-        Maps to GET Purchase endpoint.
+        Maps to GET PurchaseList endpoint.
         Common params per docs: Page, Limit, Search.
-        Docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/get
+        Docs: https://help.core.cin7.com/hc/en-us/articles/9034547620751-PurchaseList
         """
         params: Dict[str, Any] = {"Page": page, "Limit": limit}
         if search:
             params["Search"] = search
-        response = await self.client.get("Purchase", params=params)
+        response = await self.client.get("PurchaseList", params=params)
         try:
             data = response.json()
         except Exception:
