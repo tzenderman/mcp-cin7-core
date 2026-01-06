@@ -4,7 +4,7 @@ import os
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Callable, Optional
+from typing import Any, Dict, Callable, List, Optional
 
 import httpx
 
@@ -208,7 +208,7 @@ class Cin7Client:
     async def get_product(
         self,
         *,
-        product_id: Optional[int] = None,
+        product_id: Optional[str] = None,
         sku: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Fetch a single product by ID or SKU.
@@ -458,6 +458,52 @@ class Cin7Client:
             f"Sale list error: {response.status_code} {response.text[:200]}"
         )
 
+    async def get_sale(
+        self,
+        *,
+        sale_id: Optional[str] = None,
+        combine_additional_charges: bool = False,
+        hide_inventory_movements: bool = False,
+        include_transactions: bool = False,
+    ) -> Dict[str, Any]:
+        """Fetch a single sale by ID with full details including line items.
+
+        Maps to GET Sale endpoint with ID filter.
+        Returns complete sale data including Quote, Order, Fulfilments, Invoices,
+        CreditNotes, and optionally InventoryMovements and Transactions.
+
+        Args:
+            sale_id: The sale UUID (required)
+            combine_additional_charges: Combine additional charges into response
+            hide_inventory_movements: Hide inventory movement details
+            include_transactions: Include transaction details
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/get
+        """
+        if not sale_id:
+            raise Cin7ClientError("get_sale requires sale_id")
+
+        params: Dict[str, Any] = {"ID": sale_id}
+        if combine_additional_charges:
+            params["CombineAdditionalCharges"] = "true"
+        if hide_inventory_movements:
+            params["HideInventoryMovements"] = "true"
+        if include_transactions:
+            params["IncludeTransactions"] = "true"
+
+        response = await self.client.get("Sale", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            return data
+
+        raise Cin7ClientError(
+            f"Sale get error: {response.status_code} {response.text[:200]}"
+        )
+
     async def list_purchase_orders(
         self,
         *,
@@ -589,6 +635,144 @@ class Cin7Client:
         raise Cin7ClientError(
             f"Stock Transfer list error: {response.status_code} {response.text[:200]}"
         )
+
+    async def get_product_suppliers(
+        self,
+        *,
+        product_id: Optional[str] = None,
+        sku: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch suppliers for a product by ID or SKU.
+
+        Maps to GET ProductSuppliers endpoint.
+        Docs: https://help.core.cin7.com/hc/en-us/articles/9034477854607-Product-Suppliers
+        """
+        if not product_id and not sku:
+            raise Cin7ClientError("get_product_suppliers requires product_id or sku")
+
+        params: Dict[str, Any] = {}
+        if product_id is not None:
+            params["ID"] = product_id
+        if sku is not None:
+            params["SKU"] = sku
+
+        response = await self.client.get("ProductSuppliers", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            return data
+
+        raise Cin7ClientError(
+            f"ProductSuppliers get error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def update_product_suppliers(
+        self,
+        products: list[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Update suppliers for one or more products via PUT ProductSuppliers.
+
+        IMPORTANT: You must supply the FULL list of suppliers for each product.
+        If a supplier is not provided, the association will be deleted.
+
+        Args:
+            products: List of dicts, each with:
+                - ProductID: Product GUID (required)
+                - Suppliers: List of supplier objects (required)
+
+        Up to 100 products can be updated in one batch.
+
+        Docs: https://help.core.cin7.com/hc/en-us/articles/9034477854607-Product-Suppliers
+        """
+        logger.debug("Cin7Client.update_product_suppliers called with %d products", len(products))
+
+        payload = {"Products": products}
+
+        try:
+            response = await self.client.put("ProductSuppliers", json=payload)
+            logger.debug("Cin7 API PUT ProductSuppliers response status: %d", response.status_code)
+
+            try:
+                data = response.json()
+            except Exception as json_error:
+                logger.error("Failed to parse ProductSuppliers response as JSON: %s", str(json_error))
+                data = {"raw": _truncate(response.text or "")}
+
+            if response.status_code in (200, 204):
+                logger.debug("ProductSuppliers update successful")
+                return data if isinstance(data, dict) else {"result": data}
+
+            error_msg = f"ProductSuppliers update error: {response.status_code} {response.text[:500]}"
+            logger.error("ProductSuppliers update failed: %s", error_msg)
+            raise Cin7ClientError(error_msg)
+
+        except Cin7ClientError:
+            raise
+        except Exception as e:
+            logger.error("Unexpected error in update_product_suppliers: %s", str(e), exc_info=True)
+            raise
+
+    async def list_product_availability(
+        self,
+        *,
+        page: int = 1,
+        limit: int = 100,
+        product_id: Optional[str] = None,
+        sku: Optional[str] = None,
+        location: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List product availability with stock levels per location.
+
+        Maps to GET ref/productavailability endpoint.
+        Returns: ProductID, SKU, Location, OnHand, Available,
+                 Allocated, OnOrder, InTransit, NextDeliveryDate, Bin, Batch
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/product/product-availability
+        """
+        params: Dict[str, Any] = {"Page": page, "Limit": limit}
+        if product_id:
+            params["ProductID"] = product_id
+        if sku:
+            params["SKU"] = sku
+        if location:
+            params["Location"] = location
+
+        response = await self.client.get("ref/productavailability", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200:
+            return data if isinstance(data, dict) else {"result": data}
+
+        raise Cin7ClientError(
+            f"ProductAvailability list error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def get_product_availability(
+        self,
+        *,
+        product_id: Optional[str] = None,
+        sku: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get availability for a single product across all locations.
+
+        Returns list of location entries (one product can have multiple
+        location records).
+        """
+        if not product_id and not sku:
+            raise Cin7ClientError("get_product_availability requires product_id or sku")
+
+        result = await self.list_product_availability(
+            product_id=product_id,
+            sku=sku,
+            limit=1000,
+        )
+        return result.get("ProductAvailabilityList", [])
 
     async def get_stock_transfer(
         self,
