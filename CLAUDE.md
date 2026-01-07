@@ -223,6 +223,21 @@ Snapshots:
 - Support field projection to limit data transfer
 - Stored in-memory in `_snapshots` dict with UUID keys
 
+### Stock Availability Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| SKU | string | Product identifier |
+| Location | string | Warehouse name |
+| OnHand | decimal | Physical stock quantity |
+| Available | decimal | OnHand - Allocated |
+| Allocated | decimal | Reserved for pending orders |
+| OnOrder | decimal | On purchase orders, not received |
+| InTransit | decimal | Being transferred |
+| NextDeliveryDate | datetime | Expected delivery |
+| Bin | string | Bin location |
+| Batch | string | Batch/lot number |
+
 ### API Integration Pattern
 
 All tools follow this pattern:
@@ -312,6 +327,25 @@ Use the snapshot workflow for catalogs with thousands of products:
 4. Continue fetching with `nextOffset` until `null`
 5. Clean up: `cin7_products_snapshot_close(snapshot_id="...")`
 
+### Checking stock levels
+
+Single product lookup:
+```python
+# Get stock for a single SKU across all locations
+result = await cin7_get_stock(sku="PRODUCT-SKU")
+# Returns: sku, locations[], total_on_hand, total_available
+```
+
+### Syncing stock with external systems
+
+For large catalogs, use the snapshot workflow:
+
+1. Start: `cin7_stock_snapshot_start(fields=["Allocated", "OnOrder"])`
+2. Poll status: `cin7_stock_snapshot_status(snapshot_id="...")`
+3. Fetch chunks: `cin7_stock_snapshot_chunk(snapshot_id="...", offset=0, limit=500)`
+4. Continue fetching with `nextOffset` until `null`
+5. Clean up: `cin7_stock_snapshot_close(snapshot_id="...")`
+
 ### Creating a purchase order
 
 1. Read template: `cin7://templates/purchase_order` resource
@@ -369,6 +403,16 @@ Use the snapshot workflow for catalogs with thousands of products:
 - `cin7_purchase_orders(page, limit, search, fields)` - List purchase orders (returns TaskID, Supplier, Status, OrderDate, Location by default)
 - `cin7_get_purchase_order(purchase_order_id)` - Get single purchase order
 - `cin7_create_purchase_order(payload)` - Create new purchase order (always created as DRAFT status)
+
+**Stock Availability:**
+- `cin7_stock_levels(page, limit, location, fields)` - List stock levels across all products/locations
+- `cin7_get_stock(sku, product_id)` - Get stock levels for a single product
+
+**Stock Availability Snapshots:**
+- `cin7_stock_snapshot_start(page, limit, location, fields)` - Start background build
+- `cin7_stock_snapshot_status(snapshot_id)` - Check build progress
+- `cin7_stock_snapshot_chunk(snapshot_id, offset, limit)` - Fetch chunk
+- `cin7_stock_snapshot_close(snapshot_id)` - Clean up
 
 ### Available MCP Resources
 
