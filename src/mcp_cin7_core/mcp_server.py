@@ -78,12 +78,15 @@ def create_mcp_server(auth=None):
     server.tool()(cin7_create_supplier)
     server.tool()(cin7_update_supplier)
     server.tool()(cin7_sales)
+    server.tool()(cin7_get_sale)
     server.tool()(cin7_purchase_orders)
     server.tool()(cin7_get_purchase_order)
     server.tool()(cin7_create_purchase_order)
     server.tool()(cin7_stock_transfers)
     server.tool()(cin7_get_stock_transfer)
-    
+    server.tool()(cin7_stock_levels)
+    server.tool()(cin7_get_stock)
+
     # Register all resources
     server.resource("cin7://templates/product")(resource_product_template)
     server.resource("cin7://templates/product/{product_id}")(resource_product_by_id)
@@ -367,7 +370,7 @@ async def cin7_products_snapshot_status(snapshot_id: str) -> Dict[str, Any]:
     }
 
 async def cin7_get_product(
-    product_id: int | None = None,
+    product_id: str | None = None,
     sku: str | None = None,
 ) -> Dict[str, Any]:
     """Get a single product by ID or SKU.
@@ -397,18 +400,61 @@ async def cin7_create_product(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     Use cin7_product_template() to get a template with all available fields.
     Required fields typically include: SKU, Name, and Category.
-    
+
+    If a Suppliers array is provided, it will be automatically registered via
+    the ProductSuppliers endpoint after product creation.
+
     Example workflow:
     1. Call cin7_product_template() to get the structure
     2. Fill in required fields (SKU, Name, Category) and any optional fields
-    3. Pass the completed payload to cin7_create_product()
+    3. Optionally include Suppliers array with supplier associations
+    4. Pass the completed payload to cin7_create_product()
 
     Docs: https://dearinventory.docs.apiary.io/#reference/product/product/post
     """
     logger.debug("Tool call: cin7_create_product(payload=%s)", _truncate(str(payload)))
+
+    # Extract Suppliers from payload - Cin7 API requires separate endpoint
+    suppliers = None
+    product_payload = dict(payload)  # Make a copy
+    if "Suppliers" in product_payload:
+        suppliers = product_payload.pop("Suppliers")
+        logger.debug("Extracted %d suppliers from payload for separate registration",
+                    len(suppliers) if isinstance(suppliers, list) else 0)
+
     client = Cin7Client.from_env()
     try:
-        result = await client.save_product(payload)
+        # Step 1: Create the product
+        result = await client.save_product(product_payload)
+        logger.debug("Product created: %s", _truncate(str(result)))
+
+        # Step 2: Register suppliers if provided
+        if suppliers and isinstance(suppliers, list) and len(suppliers) > 0:
+            # Get the product ID from the response
+            product_id = None
+            if isinstance(result, dict):
+                product_id = result.get("ID") or result.get("ProductID")
+
+            if product_id:
+                logger.debug("Registering %d suppliers for product %s", len(suppliers), product_id)
+                try:
+                    supplier_result = await client.update_product_suppliers([{
+                        "ProductID": product_id,
+                        "Suppliers": suppliers
+                    }])
+                    logger.debug("Suppliers registered: %s", _truncate(str(supplier_result)))
+                    # Add supplier registration result to response
+                    result["_suppliersRegistered"] = True
+                    result["_supplierCount"] = len(suppliers)
+                except Exception as supplier_error:
+                    logger.error("Failed to register suppliers: %s", str(supplier_error))
+                    result["_suppliersRegistered"] = False
+                    result["_supplierError"] = str(supplier_error)
+            else:
+                logger.warning("Could not extract product ID from response to register suppliers")
+                result["_suppliersRegistered"] = False
+                result["_supplierError"] = "Could not extract product ID from response"
+
         logger.debug("Tool result: cin7_create_product -> %s", _truncate(str(result)))
         return result
     finally:
@@ -420,12 +466,59 @@ async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     Provide the JSON payload as defined by Cin7 Core API. This tool forwards
     the payload to PUT Product and returns the API response.
 
+    If a Suppliers array is provided, it will be automatically updated via
+    the ProductSuppliers endpoint after product update.
+
+    IMPORTANT: When updating suppliers, you must provide the FULL list of suppliers.
+    Any suppliers not included in the array will be disassociated from the product.
+
     Docs: https://dearinventory.docs.apiary.io/#reference/product
     """
     logger.debug("Tool call: cin7_update_product(payload=%s)", _truncate(str(payload)))
+
+    # Extract Suppliers from payload - Cin7 API requires separate endpoint
+    suppliers = None
+    product_payload = dict(payload)  # Make a copy
+    if "Suppliers" in product_payload:
+        suppliers = product_payload.pop("Suppliers")
+        logger.debug("Extracted %d suppliers from payload for separate update",
+                    len(suppliers) if isinstance(suppliers, list) else 0)
+
     client = Cin7Client.from_env()
     try:
-        result = await client.update_product(payload)
+        # Step 1: Update the product
+        result = await client.update_product(product_payload)
+        logger.debug("Product updated: %s", _truncate(str(result)))
+
+        # Step 2: Update suppliers if provided
+        if suppliers and isinstance(suppliers, list) and len(suppliers) > 0:
+            # Get the product ID from the payload or response
+            product_id = None
+            if isinstance(product_payload, dict):
+                product_id = product_payload.get("ID") or product_payload.get("ProductID")
+            if not product_id and isinstance(result, dict):
+                product_id = result.get("ID") or result.get("ProductID")
+
+            if product_id:
+                logger.debug("Updating %d suppliers for product %s", len(suppliers), product_id)
+                try:
+                    supplier_result = await client.update_product_suppliers([{
+                        "ProductID": product_id,
+                        "Suppliers": suppliers
+                    }])
+                    logger.debug("Suppliers updated: %s", _truncate(str(supplier_result)))
+                    # Add supplier update result to response
+                    result["_suppliersUpdated"] = True
+                    result["_supplierCount"] = len(suppliers)
+                except Exception as supplier_error:
+                    logger.error("Failed to update suppliers: %s", str(supplier_error))
+                    result["_suppliersUpdated"] = False
+                    result["_supplierError"] = str(supplier_error)
+            else:
+                logger.warning("Could not extract product ID to update suppliers")
+                result["_suppliersUpdated"] = False
+                result["_supplierError"] = "Could not extract product ID from payload or response"
+
         logger.debug("Tool result: cin7_update_product -> %s", _truncate(str(result)))
         return result
     finally:
@@ -590,6 +683,53 @@ async def cin7_sales(
             pass
 
         logger.debug("Tool result: cin7_sales -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+
+async def cin7_get_sale(
+    sale_id: str,
+    combine_additional_charges: bool = False,
+    hide_inventory_movements: bool = False,
+    include_transactions: bool = False,
+) -> Dict[str, Any]:
+    """Get a single sale by ID with full details including line items.
+
+    Returns complete sale data including:
+    - Quote: Quote stage with lines and additional charges
+    - Order: Order stage with SaleOrderNumber, lines, and additional charges
+    - Fulfilments: Pick, Pack, Ship details with line items
+    - Invoices: Invoice details with lines and payments
+    - CreditNotes: Credit note details if any
+    - InventoryMovements: Stock movements (unless hidden)
+    - Transactions: Financial transactions (if requested)
+
+    Parameters:
+    - sale_id: The sale UUID (required)
+    - combine_additional_charges: Combine additional charges into line totals
+    - hide_inventory_movements: Exclude inventory movement details from response
+    - include_transactions: Include financial transaction details
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/get
+    """
+    logger.debug(
+        "Tool call: cin7_get_sale(sale_id=%s, combine_additional_charges=%s, "
+        "hide_inventory_movements=%s, include_transactions=%s)",
+        sale_id,
+        combine_additional_charges,
+        hide_inventory_movements,
+        include_transactions,
+    )
+    client = Cin7Client.from_env()
+    try:
+        result = await client.get_sale(
+            sale_id=sale_id,
+            combine_additional_charges=combine_additional_charges,
+            hide_inventory_movements=hide_inventory_movements,
+            include_transactions=include_transactions,
+        )
+        logger.debug("Tool result: cin7_get_sale -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -806,6 +946,114 @@ async def cin7_get_stock_transfer(
         await client.aclose()
 
 
+# ----------------------------- Stock Availability Tools -----------------------------
+
+def _project_stock_items(items: List[Dict[str, Any]], fields: Optional[List[str]]) -> List[Dict[str, Any]]:
+    """Project stock availability items to requested fields."""
+    base_fields = {"SKU", "Location", "OnHand", "Available"}
+    requested_fields = set(fields or [])
+    allowed = base_fields | requested_fields
+    projected: List[Dict[str, Any]] = []
+    for it in items:
+        if isinstance(it, dict):
+            projected.append({k: v for k, v in it.items() if k in allowed})
+        else:
+            projected.append(it)
+    return projected
+
+
+async def cin7_stock_levels(
+    page: int = 1,
+    limit: int = 100,
+    location: str | None = None,
+    fields: list[str] | None = None,
+) -> Dict[str, Any]:
+    """List stock levels across all products and locations.
+
+    Default fields: SKU, Location, OnHand, Available
+    Optional fields: Allocated, OnOrder, InTransit, NextDeliveryDate, Bin, Batch, Barcode
+
+    Parameters:
+    - page: Page number (1-based)
+    - limit: Items per page (max 1000)
+    - location: Filter by location name
+    - fields: Additional fields beyond defaults (e.g., ["Allocated", "OnOrder"])
+
+    Returns:
+        ProductAvailabilityList with stock data per SKU/location
+    """
+    logger.debug(
+        "Tool call: cin7_stock_levels(page=%s, limit=%s, location=%s, fields=%s)",
+        page, limit, location, fields,
+    )
+    client = Cin7Client.from_env()
+    try:
+        result = await client.list_product_availability(
+            page=page, limit=limit, location=location
+        )
+
+        # Apply field projection
+        if isinstance(result, dict):
+            items = result.get("ProductAvailabilityList")
+            if isinstance(items, list):
+                result["ProductAvailabilityList"] = _project_stock_items(items, fields)
+
+        logger.debug("Tool result: cin7_stock_levels -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+
+async def cin7_get_stock(
+    sku: str | None = None,
+    product_id: str | None = None,
+) -> Dict[str, Any]:
+    """Get stock levels for a single product across all locations.
+
+    Parameters:
+    - sku: Product SKU (preferred)
+    - product_id: Product GUID
+
+    Returns:
+        Dict with:
+        - sku: The product SKU
+        - locations: List of location entries with OnHand, Available, Allocated, OnOrder
+        - total_on_hand: Sum of OnHand across all locations
+        - total_available: Sum of Available across all locations
+    """
+    logger.debug(
+        "Tool call: cin7_get_stock(sku=%s, product_id=%s)",
+        sku, product_id,
+    )
+    client = Cin7Client.from_env()
+    try:
+        locations = await client.get_product_availability(
+            sku=sku, product_id=product_id
+        )
+
+        # Aggregate totals
+        total_on_hand = sum(loc.get("OnHand", 0) or 0 for loc in locations)
+        total_available = sum(loc.get("Available", 0) or 0 for loc in locations)
+
+        # Determine SKU from results if not provided
+        result_sku = sku
+        if not result_sku and locations:
+            result_sku = locations[0].get("SKU", "")
+
+        result = {
+            "sku": result_sku,
+            "product_id": product_id or (locations[0].get("ProductID") if locations else None),
+            "locations": locations,
+            "total_on_hand": total_on_hand,
+            "total_available": total_available,
+        }
+
+        logger.debug("Tool result: cin7_get_stock -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+
 # ----------------------------- Product Template Resources -----------------------------
 
 async def resource_product_template() -> str:
@@ -845,7 +1093,7 @@ async def resource_product_by_id(product_id: str) -> str:
     logger.debug("Resource call: resource_product_by_id(product_id=%s)", product_id)
     client = Cin7Client.from_env()
     try:
-        product = await client.get_product(product_id=int(product_id))
+        product = await client.get_product(product_id=product_id)
         logger.debug("Resource result: resource_product_by_id -> %s", _truncate(str(product)))
         return json.dumps(product, indent=2)
     finally:
