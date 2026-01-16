@@ -504,6 +504,102 @@ class Cin7Client:
             f"Sale get error: {response.status_code} {response.text[:200]}"
         )
 
+    async def save_sale(self, sale: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new Sale via POST Sale.
+
+        Provide the full sale payload as required by Cin7 Core.
+        The Status field should be set to "DRAFT" to allow user review before authorization.
+
+        The payload can have Lines at the top level (convenience) or nested under Quote.
+        This method normalizes the structure before sending to the API.
+
+        Key fields:
+        - Customer or CustomerID (required)
+        - Location (required)
+        - Lines array with product details
+        - Status: DRAFT or AUTHORISED (defaults to DRAFT)
+        - SkipQuote: false (default) to create Quote first, true to skip to Order
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/post
+        """
+        logger.debug("Cin7Client.save_sale called with payload: %s", sale)
+        logger.debug("Payload size: %d chars, keys: %s", len(str(sale)), list(sale.keys()) if isinstance(sale, dict) else "NOT A DICT")
+
+        # Make a copy to avoid mutating the original
+        payload = dict(sale)
+
+        # Ensure Status is DRAFT for new sales (unless explicitly AUTHORISED)
+        if "Status" not in payload:
+            payload["Status"] = "DRAFT"
+
+        # Cin7 API expects Lines at top level for Sale POST (unlike Purchase which nests under Order)
+        # The Sale endpoint accepts Lines directly in the payload
+
+        try:
+            response = await self.client.post("Sale", json=payload)
+            logger.debug("Cin7 API POST Sale response status: %d", response.status_code)
+            logger.debug("Cin7 API response headers: %s", dict(response.headers))
+            logger.debug("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
+
+            try:
+                data = response.json()
+            except Exception as json_error:
+                logger.error("Failed to parse Cin7 response as JSON: %s", str(json_error))
+                data = {"raw": _truncate(response.text or "")}
+
+            if response.status_code in (200, 201):
+                logger.debug("Sale save successful, returning data")
+                return data if isinstance(data, dict) else {"result": data}
+
+            error_msg = f"Sale save error: {response.status_code} {response.text[:500]}"
+            logger.error("Sale save failed: %s", error_msg)
+            logger.debug("Full response text: %s", response.text)
+            raise Cin7ClientError(error_msg)
+
+        except Cin7ClientError:
+            raise
+        except Exception as e:
+            logger.error("Unexpected error in save_sale: %s", str(e), exc_info=True)
+            raise
+
+    async def update_sale(self, sale: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing Sale via PUT Sale.
+
+        Provide the full sale payload as required by Cin7 Core. Typically
+        includes the sale ID along with updated fields.
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/put
+        """
+        logger.debug("Cin7Client.update_sale called with payload: %s", sale)
+        logger.debug("Payload size: %d chars, keys: %s", len(str(sale)), list(sale.keys()) if isinstance(sale, dict) else "NOT A DICT")
+
+        try:
+            response = await self.client.put("Sale", json=sale)
+            logger.debug("Cin7 API PUT Sale response status: %d", response.status_code)
+            logger.debug("Cin7 API response headers: %s", dict(response.headers))
+            logger.debug("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
+
+            try:
+                data = response.json()
+            except Exception as json_error:
+                logger.error("Failed to parse Cin7 response as JSON: %s", str(json_error))
+                data = {"raw": _truncate(response.text or "")}
+
+            if response.status_code in (200, 204):
+                logger.debug("Sale update successful, returning data")
+                return data if isinstance(data, dict) else {"result": data}
+
+            error_msg = f"Sale update error: {response.status_code} {response.text[:500]}"
+            logger.error("Sale update failed: %s", error_msg)
+            logger.debug("Full response text: %s", response.text)
+            raise Cin7ClientError(error_msg)
+
+        except Cin7ClientError:
+            raise
+        except Exception as e:
+            logger.error("Unexpected error in update_sale: %s", str(e), exc_info=True)
+            raise
+
     async def list_purchase_orders(
         self,
         *,

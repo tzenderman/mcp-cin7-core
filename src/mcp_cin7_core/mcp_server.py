@@ -79,6 +79,8 @@ def create_mcp_server(auth=None):
     server.tool()(cin7_update_supplier)
     server.tool()(cin7_sales)
     server.tool()(cin7_get_sale)
+    server.tool()(cin7_create_sale)
+    server.tool()(cin7_update_sale)
     server.tool()(cin7_purchase_orders)
     server.tool()(cin7_get_purchase_order)
     server.tool()(cin7_create_purchase_order)
@@ -100,12 +102,15 @@ def create_mcp_server(auth=None):
     server.resource("cin7://templates/supplier/name/{name}")(resource_supplier_by_name)
     server.resource("cin7://templates/purchase_order")(resource_purchase_order_template)
     server.resource("cin7://templates/purchase_order/{purchase_order_id}")(resource_purchase_order_by_id)
-    
+    server.resource("cin7://templates/sale")(resource_sale_template)
+    server.resource("cin7://templates/sale/{sale_id}")(resource_sale_by_id)
+
     # Register all prompts
     server.prompt()(create_product)
     server.prompt()(update_batch)
     server.prompt()(verify_required_fields)
     server.prompt()(create_purchase_order)
+    server.prompt()(create_sale)
     
     return server
 # ----------------------------- Snapshot storage -----------------------------
@@ -734,6 +739,80 @@ async def cin7_get_sale(
             include_transactions=include_transactions,
         )
         logger.debug("Tool result: cin7_get_sale -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+
+async def cin7_create_sale(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new Cin7 Core sale via POST Sale.
+
+    Provide the JSON payload as defined by Cin7 Core API. The payload should follow
+    the same structure as returned by the cin7://templates/sale resource.
+
+    IMPORTANT: All new sales are created with Status="DRAFT" by default to allow
+    review before authorization. You can set Status="AUTHORISED" to create an
+    authorized quote directly.
+
+    Required fields:
+    - Customer or CustomerID (customer name or ID)
+    - Location (warehouse/sales location)
+    - Lines (array with at least one line item)
+
+    Required fields for each line item:
+    - ProductID (GUID from cin7_get_product)
+    - SKU (product SKU)
+    - Name (product name)
+    - Quantity (minimum 1)
+    - Price (unit price)
+    - Tax (tax amount)
+    - TaxRule (tax rule name)
+    - Total (line total: (Price × Quantity) - Discount + Tax)
+
+    Optional but recommended fields:
+    - BillingAddress, ShippingAddress
+    - TaxRule (sale-level default)
+    - Terms (payment terms, e.g., "30 days")
+    - PriceTier (e.g., "Tier 1")
+    - SaleOrderDate (defaults to today)
+    - SkipQuote (false = create Quote first, true = skip to Order)
+
+    Example workflow:
+    1. Read cin7://templates/sale to get the complete structure
+    2. Get customer info with cin7_suppliers or use customer name
+    3. Get product info with cin7_get_product (to get ProductID, SKU, Name)
+    4. Calculate line totals: (Price × Quantity) - Discount + Tax
+    5. Build Lines array with all required fields
+    6. Submit with cin7_create_sale()
+    7. Sale will be created as DRAFT Quote for user review
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/post
+    """
+    logger.debug("Tool call: cin7_create_sale(payload=%s)", _truncate(str(payload)))
+    client = Cin7Client.from_env()
+    try:
+        result = await client.save_sale(payload)
+        logger.debug("Tool result: cin7_create_sale -> %s", _truncate(str(result)))
+        return result
+    finally:
+        await client.aclose()
+
+
+async def cin7_update_sale(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Update a Cin7 Core sale via PUT Sale.
+
+    Provide the JSON payload as defined by Cin7 Core API. This tool forwards
+    the payload to PUT Sale and returns the API response.
+
+    The payload must include the SaleID of the sale to update.
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/put
+    """
+    logger.debug("Tool call: cin7_update_sale(payload=%s)", _truncate(str(payload)))
+    client = Cin7Client.from_env()
+    try:
+        result = await client.update_sale(payload)
+        logger.debug("Tool result: cin7_update_sale -> %s", _truncate(str(result)))
         return result
     finally:
         await client.aclose()
@@ -1445,6 +1524,102 @@ async def resource_purchase_order_by_id(purchase_order_id: str) -> str:
         await client.aclose()
 
 
+# ----------------------------- Sale Template Resources -----------------------------
+
+async def resource_sale_template() -> str:
+    """Blank sale template with all available fields.
+
+    Use this template to see what fields are available when creating sales.
+    All sales are created with Status="DRAFT" by default for user review.
+    """
+    template = {
+        "CustomerID": "",  # Customer GUID (use this or Customer name)
+        "Customer": "",  # REQUIRED: Customer name
+        "Phone": "",
+        "Email": "",
+        "Contact": "",
+        "DefaultAccount": "200",  # Default revenue account
+        "BillingAddress": {
+            "Line1": "",
+            "Line2": "",
+            "City": "",
+            "State": "",
+            "Postcode": "",
+            "Country": ""
+        },
+        "ShippingAddress": {
+            "Line1": "",
+            "Line2": "",
+            "City": "",
+            "State": "",
+            "Postcode": "",
+            "Country": "",
+            "Company": "",
+            "Contact": "",
+            "ShipToOther": False
+        },
+        "ShippingNotes": "",
+        "TaxRule": "Tax Exempt",  # Default tax rule for sale
+        "TaxInclusive": False,  # Prices include tax
+        "Terms": "30 days",  # Payment terms
+        "PriceTier": "Tier 1",  # Price tier for customer
+        "Location": "",  # REQUIRED: Warehouse/sales location
+        "Note": "",  # Internal note
+        "CustomerReference": "",  # Customer PO reference
+        "SalesRepresentative": "",  # Sales rep name
+        "Carrier": "",  # Shipping carrier
+        "CurrencyRate": 1.0,
+        "SaleOrderDate": "",  # Order date (YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD)
+        "ShipBy": "",  # Ship by date
+        "SkipQuote": False,  # False = create Quote first, True = skip to Order
+        "Status": "DRAFT",  # DRAFT or AUTHORISED for new sales
+        "Lines": [  # REQUIRED: Array of sale lines
+            {
+                "ProductID": "",  # REQUIRED: Product GUID from cin7_get_product
+                "SKU": "",  # REQUIRED: Product SKU (max 50 chars)
+                "Name": "",  # REQUIRED: Product name (max 1024 chars)
+                "Quantity": 1.0,  # REQUIRED: Sale quantity (decimal, min 1)
+                "Price": 0.0,  # REQUIRED: Unit price (decimal, up to 4 decimal places)
+                "Discount": 0.0,  # Optional: Discount 0-100 (decimal)
+                "Tax": 0.0,  # REQUIRED: Tax amount (decimal, up to 4 decimal places)
+                "AverageCost": 0.0,  # Cost for margin calculation
+                "TaxRule": "Tax Exempt",  # REQUIRED: Line tax rule name
+                "Comment": "",  # Optional: Comment for this line
+                "Total": 0.0,  # REQUIRED: Line total (Price × Quantity - Discount + Tax)
+            }
+        ],
+        "AdditionalCharges": [  # Optional: Array of additional charges
+            {
+                "Description": "",  # Service product name
+                "Price": 0.0,
+                "Quantity": 1.0,
+                "Discount": 0.0,
+                "Tax": 0.0,
+                "Total": 0.0,
+                "TaxRule": "Tax Exempt",
+                "Comment": ""
+            }
+        ],
+        "Memo": "",  # External memo for Quote
+    }
+    return json.dumps(template, indent=2)
+
+
+async def resource_sale_by_id(sale_id: str) -> str:
+    """Get existing sale as template for review or updates.
+
+    Returns the current sale data.
+    """
+    logger.debug("Resource call: resource_sale_by_id(sale_id=%s)", sale_id)
+    client = Cin7Client.from_env()
+    try:
+        sale = await client.get_sale(sale_id=sale_id)
+        logger.debug("Resource result: resource_sale_by_id -> %s", _truncate(str(sale)))
+        return json.dumps(sale, indent=2)
+    finally:
+        await client.aclose()
+
+
 # ----------------------------- Workflow Prompts -----------------------------
 
 async def create_product() -> str:
@@ -1587,6 +1762,67 @@ Example workflow:
 - Set OrderDate to today's date
 - Submit with cin7_create_purchase_order
 - PO will be created as DRAFT for user review
+"""
+
+
+async def create_sale() -> str:
+    """Guide for creating a Cin7 Core sale."""
+    return """Create a sale in Cin7 Core:
+
+1. Read cin7://templates/sale to see all available fields
+
+2. REQUIRED fields for Cin7 API:
+   - Customer (customer name) or CustomerID (customer GUID)
+   - Location (warehouse/sales location)
+   - Lines (array with at least one line item)
+
+3. Each line item REQUIRES:
+   - ProductID (GUID from cin7_get_product)
+   - SKU (product SKU)
+   - Name (product name)
+   - Quantity (sale quantity, minimum 1)
+   - Price (unit price per unit)
+   - Tax (tax amount)
+   - TaxRule (tax rule name, e.g., "Tax Exempt")
+   - Total (line total for validation: (Price × Quantity) - Discount + Tax)
+
+   Optional line fields:
+   - Discount (0-100, default 0)
+   - AverageCost (for margin calculation)
+   - Comment (line comment)
+
+4. Optional: AdditionalCharges array for service charges
+   Each additional charge includes:
+   - Description (service product name)
+   - Quantity, Price, Tax, TaxRule, Total
+
+5. IMPORTANT: Status field behavior
+   - All new sales are created with Status="DRAFT" by default
+   - This creates a Draft Quote for user review
+   - Set Status="AUTHORISED" to create an authorized Quote
+   - Users can convert Quote to Order in Cin7 Core web interface
+
+6. Optional but recommended sale-level fields:
+   - BillingAddress, ShippingAddress
+   - TaxRule (default tax rule for sale)
+   - Terms (payment terms, e.g., "30 days")
+   - PriceTier (customer price tier)
+   - SaleOrderDate (defaults to today)
+   - CustomerReference (customer's PO number)
+   - SalesRepresentative
+   - SkipQuote (false = Quote stage, true = skip to Order)
+
+7. Use cin7_create_sale tool with complete payload
+
+8. Verify creation with cin7_get_sale using returned SaleID
+
+Example workflow:
+- Use customer name directly or look up CustomerID
+- Get product info with cin7_get_product (to get ProductID, SKU, Name)
+- Calculate line totals: (Price × Quantity) - Discount + Tax
+- Build Lines array with all required fields
+- Submit with cin7_create_sale
+- Sale will be created as Draft Quote for user review
 """
 
 

@@ -217,3 +217,132 @@ class TestStockSnapshotTools:
             # Verify snapshot is gone
             status = await cin7_stock_snapshot_status(snapshot_id)
             assert "error" in status
+
+
+class TestSaleTools:
+    """Tests for sale creation and update tools."""
+
+    @pytest.mark.asyncio
+    async def test_cin7_create_sale_calls_client(self):
+        """Should call save_sale on client and return result."""
+        mock_result = {
+            "SaleID": "sale-123",
+            "Customer": "Test Customer",
+            "Status": "DRAFT",
+            "Quote": {"Status": "DRAFT", "Lines": []}
+        }
+
+        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+            mock_client = MagicMock()
+            mock_client.save_sale = AsyncMock(return_value=mock_result)
+            mock_client.aclose = AsyncMock()
+            mock_class.from_env.return_value = mock_client
+
+            from mcp_cin7_core.mcp_server import cin7_create_sale
+
+            payload = {
+                "Customer": "Test Customer",
+                "Location": "MAIN",
+                "Lines": [
+                    {
+                        "ProductID": "prod-123",
+                        "SKU": "TEST-SKU",
+                        "Name": "Test Product",
+                        "Quantity": 1,
+                        "Price": 10.0,
+                        "Tax": 0,
+                        "TaxRule": "Tax Exempt",
+                        "Total": 10.0
+                    }
+                ]
+            }
+            result = await cin7_create_sale(payload)
+
+            assert result["SaleID"] == "sale-123"
+            assert result["Customer"] == "Test Customer"
+            mock_client.save_sale.assert_called_once_with(payload)
+            mock_client.aclose.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cin7_update_sale_calls_client(self):
+        """Should call update_sale on client and return result."""
+        mock_result = {
+            "SaleID": "sale-123",
+            "Customer": "Updated Customer",
+            "Status": "DRAFT"
+        }
+
+        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+            mock_client = MagicMock()
+            mock_client.update_sale = AsyncMock(return_value=mock_result)
+            mock_client.aclose = AsyncMock()
+            mock_class.from_env.return_value = mock_client
+
+            from mcp_cin7_core.mcp_server import cin7_update_sale
+
+            payload = {
+                "SaleID": "sale-123",
+                "Customer": "Updated Customer"
+            }
+            result = await cin7_update_sale(payload)
+
+            assert result["SaleID"] == "sale-123"
+            assert result["Customer"] == "Updated Customer"
+            mock_client.update_sale.assert_called_once_with(payload)
+            mock_client.aclose.assert_called_once()
+
+
+class TestSaleTemplateResources:
+    """Tests for sale template resources."""
+
+    @pytest.mark.asyncio
+    async def test_resource_sale_template_returns_json(self):
+        """Should return a valid JSON sale template."""
+        from mcp_cin7_core.mcp_server import resource_sale_template
+        import json
+
+        result = await resource_sale_template()
+        template = json.loads(result)
+
+        # Check required structure
+        assert "Customer" in template
+        assert "Location" in template
+        assert "Lines" in template
+        assert "Status" in template
+        assert template["Status"] == "DRAFT"
+        assert isinstance(template["Lines"], list)
+        assert len(template["Lines"]) > 0
+        # Check line structure
+        line = template["Lines"][0]
+        assert "ProductID" in line
+        assert "SKU" in line
+        assert "Name" in line
+        assert "Quantity" in line
+        assert "Price" in line
+        assert "Total" in line
+
+    @pytest.mark.asyncio
+    async def test_resource_sale_by_id_calls_client(self):
+        """Should call get_sale on client and return JSON."""
+        mock_result = {
+            "SaleID": "sale-123",
+            "Customer": "Test Customer",
+            "Quote": {"Status": "DRAFT"}
+        }
+
+        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+            mock_client = MagicMock()
+            mock_client.get_sale = AsyncMock(return_value=mock_result)
+            mock_client.aclose = AsyncMock()
+            mock_class.from_env.return_value = mock_client
+
+            from mcp_cin7_core.mcp_server import resource_sale_by_id
+            import json
+
+            result = await resource_sale_by_id("sale-123")
+            data = json.loads(result)
+
+            assert data["SaleID"] == "sale-123"
+            assert data["Customer"] == "Test Customer"
+            mock_client.get_sale.assert_called_once_with(sale_id="sale-123")
+            mock_client.aclose.assert_called_once()
