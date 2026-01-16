@@ -661,13 +661,14 @@ class Cin7Client:
         )
 
     async def save_purchase_order(self, purchase_order: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new Purchase Order via POST Purchase.
+        """Create a new Purchase Order via two-step Cin7 API process.
 
-        Provide the full purchase order payload as required by Cin7 Core.
-        The Status field should be set to "DRAFT" to allow user review before authorization.
+        The Cin7 API requires a two-step process for creating Purchase Orders with line items:
+        1. POST to /Purchase - creates the base purchase header, returns TaskID
+        2. POST to /purchase/order - adds order lines using the TaskID
 
-        The payload can have Lines at the top level (convenience) or nested under Order.
-        This method normalizes the structure before sending to the API.
+        The payload can have Lines at the top level (convenience) which will be extracted
+        and sent in the second API call.
 
         Docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/post
         """
@@ -677,38 +678,23 @@ class Cin7Client:
         # Make a copy to avoid mutating the original
         payload = dict(purchase_order)
 
+        # Extract Lines for the second API call (if present)
+        lines = payload.pop("Lines", None)
+        additional_charges = payload.pop("AdditionalCharges", [])
+        order_memo = payload.pop("Memo", None)
+
+        # Remove Order if present - we'll create it in step 2
+        payload.pop("Order", None)
+
         # Ensure Status is DRAFT for new purchase orders
         if "Status" not in payload:
             payload["Status"] = "DRAFT"
-        elif payload.get("Status") != "DRAFT":
-            logger.warning("Purchase Order Status was %s, forcing to DRAFT", payload.get("Status"))
-            payload["Status"] = "DRAFT"
-
-        # Cin7 API expects Lines nested under Order for Advanced POs
-        # If Lines is at top level, move it into Order structure
-        if "Lines" in payload and "Order" not in payload:
-            lines = payload.pop("Lines")
-            additional_charges = payload.pop("AdditionalCharges", [])
-            memo = payload.pop("Memo", None)
-            # Create Order object with Status="DRAFT" for Advanced PO
-            payload["Order"] = {
-                "Status": "DRAFT",
-                "Lines": lines,
-                "AdditionalCharges": additional_charges,
-            }
-            if memo is not None:
-                payload["Order"]["Memo"] = memo
-            logger.debug("Restructured payload: moved Lines into Order object (Advanced PO)")
-        elif "Order" in payload and isinstance(payload["Order"], dict):
-            # Ensure Order.Status is set for Advanced PO
-            if "Status" not in payload["Order"]:
-                payload["Order"]["Status"] = "DRAFT"
-                logger.debug("Set Order.Status to DRAFT for Advanced PO")
 
         try:
+            # STEP 1: Create the base purchase header (without lines)
+            logger.debug("Step 1: Creating base purchase header")
             response = await self.client.post("Purchase", json=payload)
             logger.debug("Cin7 API POST Purchase response status: %d", response.status_code)
-            logger.debug("Cin7 API response headers: %s", dict(response.headers))
             logger.debug("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
 
             try:
@@ -717,14 +703,58 @@ class Cin7Client:
                 logger.error("Failed to parse Cin7 response as JSON: %s", str(json_error))
                 data = {"raw": _truncate(response.text or "")}
 
-            if response.status_code in (200, 201):
-                logger.debug("Purchase Order save successful, returning data")
-                return data if isinstance(data, dict) else {"result": data}
+            if response.status_code not in (200, 201):
+                error_msg = f"Purchase Order header creation error: {response.status_code} {response.text[:500]}"
+                logger.error("Purchase Order header creation failed: %s", error_msg)
+                raise Cin7ClientError(error_msg)
 
-            error_msg = f"Purchase Order save error: {response.status_code} {response.text[:500]}"
-            logger.error("Purchase Order save failed: %s", error_msg)
-            logger.debug("Full response text: %s", response.text)
-            raise Cin7ClientError(error_msg)
+            # Extract TaskID from response for step 2
+            task_id = data.get("ID") or data.get("TaskID")
+            if not task_id:
+                logger.error("No TaskID returned from Purchase creation: %s", data)
+                raise Cin7ClientError("No TaskID returned from Purchase creation")
+
+            logger.debug("Step 1 complete: Created purchase with TaskID=%s", task_id)
+
+            # STEP 2: Add order lines (if we have any)
+            if lines:
+                logger.debug("Step 2: Adding %d order lines to TaskID=%s", len(lines), task_id)
+
+                order_payload = {
+                    "TaskID": task_id,
+                    "Status": "DRAFT",
+                    "Lines": lines,
+                }
+                if additional_charges:
+                    order_payload["AdditionalCharges"] = additional_charges
+                if order_memo:
+                    order_payload["Memo"] = order_memo
+
+                order_response = await self.client.post("purchase/order", json=order_payload)
+                logger.debug("Cin7 API POST purchase/order response status: %d", order_response.status_code)
+                logger.debug("Cin7 API response body (first 1000 chars): %s", order_response.text[:1000] if order_response.text else "(empty)")
+
+                try:
+                    order_data = order_response.json()
+                except Exception as json_error:
+                    logger.error("Failed to parse order response as JSON: %s", str(json_error))
+                    order_data = {"raw": _truncate(order_response.text or "")}
+
+                if order_response.status_code not in (200, 201):
+                    error_msg = f"Purchase Order lines creation error: {order_response.status_code} {order_response.text[:500]}"
+                    logger.error("Purchase Order lines creation failed: %s", error_msg)
+                    raise Cin7ClientError(error_msg)
+
+                logger.debug("Step 2 complete: Added order lines successfully")
+
+                # Return the combined result with order data
+                if isinstance(order_data, dict):
+                    data["Order"] = order_data
+                    return data
+                return data
+
+            logger.debug("Purchase Order save successful (no lines), returning data")
+            return data if isinstance(data, dict) else {"result": data}
 
         except Cin7ClientError:
             raise

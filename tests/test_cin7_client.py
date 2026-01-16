@@ -206,3 +206,159 @@ class TestUpdateSale:
         payload = {"SaleID": "nonexistent", "Customer": "Test"}
         with pytest.raises(Cin7ClientError, match="Sale update error"):
             await mock_client.update_sale(payload)
+
+
+class TestSavePurchaseOrder:
+    """Tests for save_purchase_order method (two-step process)."""
+
+    async def test_creates_purchase_with_lines_two_step(self, mock_client):
+        """Should create purchase header then add order lines in two API calls."""
+        # Step 1: POST /Purchase returns TaskID
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "task-123", "Supplier": "Test Supplier"}'
+        header_response.json.return_value = {
+            "ID": "task-123",
+            "Supplier": "Test Supplier",
+            "Status": "DRAFT"
+        }
+
+        # Step 2: POST /purchase/order returns order with lines
+        order_response = MagicMock()
+        order_response.status_code = 200
+        order_response.text = '{"TaskID": "task-123", "Status": "DRAFT", "Lines": [...]}'
+        order_response.json.return_value = {
+            "TaskID": "task-123",
+            "Status": "DRAFT",
+            "Lines": [
+                {"ProductID": "prod-123", "SKU": "TEST-SKU", "Quantity": 5}
+            ]
+        }
+
+        # Mock post to return different responses for each call
+        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+
+        payload = {
+            "Supplier": "Test Supplier",
+            "Location": "MAIN",
+            "Lines": [
+                {
+                    "ProductID": "prod-123",
+                    "SKU": "TEST-SKU",
+                    "Name": "Test Product",
+                    "Quantity": 5,
+                    "Price": 10.0,
+                    "Tax": 0,
+                    "TaxRule": "Tax Exempt",
+                    "Total": 50.0
+                }
+            ]
+        }
+        result = await mock_client.save_purchase_order(payload)
+
+        # Should have made two POST calls
+        assert mock_client.client.post.call_count == 2
+
+        # First call: POST /Purchase (header only, no Lines)
+        first_call = mock_client.client.post.call_args_list[0]
+        assert first_call[0][0] == "Purchase"
+        first_payload = first_call.kwargs.get("json", first_call[1].get("json", {}))
+        assert "Lines" not in first_payload
+        assert first_payload.get("Supplier") == "Test Supplier"
+
+        # Second call: POST /purchase/order with TaskID and Lines
+        second_call = mock_client.client.post.call_args_list[1]
+        assert second_call[0][0] == "purchase/order"
+        second_payload = second_call.kwargs.get("json", second_call[1].get("json", {}))
+        assert second_payload.get("TaskID") == "task-123"
+        assert "Lines" in second_payload
+        assert len(second_payload["Lines"]) == 1
+
+        # Result should include Order data
+        assert result["ID"] == "task-123"
+        assert "Order" in result
+
+    async def test_creates_purchase_without_lines_single_step(self, mock_client):
+        """Should create purchase header only if no lines provided."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "task-123", "Supplier": "Test Supplier"}'
+        header_response.json.return_value = {
+            "ID": "task-123",
+            "Supplier": "Test Supplier",
+            "Status": "DRAFT"
+        }
+        mock_client.client.post = AsyncMock(return_value=header_response)
+
+        payload = {
+            "Supplier": "Test Supplier",
+            "Location": "MAIN"
+        }
+        result = await mock_client.save_purchase_order(payload)
+
+        # Should only make one POST call
+        assert mock_client.client.post.call_count == 1
+        assert result["ID"] == "task-123"
+
+    async def test_defaults_status_to_draft(self, mock_client):
+        """Should set Status to DRAFT if not provided."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "task-123"}'
+        header_response.json.return_value = {"ID": "task-123"}
+        mock_client.client.post = AsyncMock(return_value=header_response)
+
+        payload = {"Supplier": "Test", "Location": "MAIN"}
+        await mock_client.save_purchase_order(payload)
+
+        call_args = mock_client.client.post.call_args
+        sent_payload = call_args.kwargs.get("json", call_args[1].get("json", {}))
+        assert sent_payload.get("Status") == "DRAFT"
+
+    async def test_raises_on_header_creation_error(self, mock_client):
+        """Should raise Cin7ClientError if header creation fails."""
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.text = "Bad Request: Supplier is required"
+        mock_response.json.return_value = {"error": "Supplier is required"}
+        mock_client.client.post = AsyncMock(return_value=mock_response)
+
+        payload = {"Location": "MAIN", "Lines": [{"ProductID": "123"}]}
+        with pytest.raises(Cin7ClientError, match="header creation error"):
+            await mock_client.save_purchase_order(payload)
+
+    async def test_raises_on_order_lines_creation_error(self, mock_client):
+        """Should raise Cin7ClientError if order lines creation fails."""
+        # Step 1 succeeds
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "task-123"}'
+        header_response.json.return_value = {"ID": "task-123"}
+
+        # Step 2 fails
+        order_response = MagicMock()
+        order_response.status_code = 400
+        order_response.text = "Bad Request: Invalid product"
+        order_response.json.return_value = {"error": "Invalid product"}
+
+        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+
+        payload = {
+            "Supplier": "Test",
+            "Location": "MAIN",
+            "Lines": [{"ProductID": "invalid"}]
+        }
+        with pytest.raises(Cin7ClientError, match="lines creation error"):
+            await mock_client.save_purchase_order(payload)
+
+    async def test_raises_if_no_task_id_returned(self, mock_client):
+        """Should raise Cin7ClientError if no TaskID returned."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"Supplier": "Test"}'
+        mock_response.json.return_value = {"Supplier": "Test"}  # No ID field
+        mock_client.client.post = AsyncMock(return_value=mock_response)
+
+        payload = {"Supplier": "Test", "Location": "MAIN", "Lines": [{"ProductID": "123"}]}
+        with pytest.raises(Cin7ClientError, match="No TaskID returned"):
+            await mock_client.save_purchase_order(payload)
