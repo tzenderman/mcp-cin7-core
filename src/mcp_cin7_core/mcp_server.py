@@ -1384,6 +1384,10 @@ async def resource_purchase_order_template() -> str:
 
     Use this template to see what fields are available when creating purchase orders.
     All purchase orders are created with Status="DRAFT" for user review.
+
+    Note: Lines can be provided at the top level (as shown here for simplicity) or
+    nested under an "Order" object. The client will automatically restructure the
+    payload if needed.
     """
     template = {
         "TaskID": "",  # Internal ID (only for updates, leave empty for new POs)
@@ -1393,6 +1397,7 @@ async def resource_purchase_order_template() -> str:
         "OrderDate": "",  # REQUIRED: Order date (YYYY-MM-DD format)
         "RequiredBy": "",  # Expected delivery date (YYYY-MM-DD format)
         "CurrencyCode": "USD",  # Currency (USD, EUR, etc.)
+        "Note": "",  # Optional internal note
         "Lines": [  # REQUIRED: Array of order lines
             {
                 "ProductID": "",  # REQUIRED*: Product ID (GUID from cin7_get_product)
@@ -1420,8 +1425,7 @@ async def resource_purchase_order_template() -> str:
                 "Discount": 0.0,  # Optional: Discount 0-100 (decimal, up to 2 decimal places)
             }
         ],
-        "Note": "",  # Optional internal note
-        "Memo": "",  # Optional external memo
+        "Memo": "",  # Optional external memo (goes into Order)
     }
     return json.dumps(template, indent=2)
 

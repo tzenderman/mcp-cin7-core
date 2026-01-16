@@ -570,20 +570,47 @@ class Cin7Client:
         Provide the full purchase order payload as required by Cin7 Core.
         The Status field should be set to "DRAFT" to allow user review before authorization.
 
+        The payload can have Lines at the top level (convenience) or nested under Order.
+        This method normalizes the structure before sending to the API.
+
         Docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/post
         """
         logger.debug("Cin7Client.save_purchase_order called with payload: %s", purchase_order)
         logger.debug("Payload size: %d chars, keys: %s", len(str(purchase_order)), list(purchase_order.keys()) if isinstance(purchase_order, dict) else "NOT A DICT")
 
+        # Make a copy to avoid mutating the original
+        payload = dict(purchase_order)
+
         # Ensure Status is DRAFT for new purchase orders
-        if isinstance(purchase_order, dict) and "Status" not in purchase_order:
-            purchase_order["Status"] = "DRAFT"
-        elif isinstance(purchase_order, dict) and purchase_order.get("Status") != "DRAFT":
-            logger.warning("Purchase Order Status was %s, forcing to DRAFT", purchase_order.get("Status"))
-            purchase_order["Status"] = "DRAFT"
+        if "Status" not in payload:
+            payload["Status"] = "DRAFT"
+        elif payload.get("Status") != "DRAFT":
+            logger.warning("Purchase Order Status was %s, forcing to DRAFT", payload.get("Status"))
+            payload["Status"] = "DRAFT"
+
+        # Cin7 API expects Lines nested under Order for Advanced POs
+        # If Lines is at top level, move it into Order structure
+        if "Lines" in payload and "Order" not in payload:
+            lines = payload.pop("Lines")
+            additional_charges = payload.pop("AdditionalCharges", [])
+            memo = payload.pop("Memo", None)
+            # Create Order object with Status="DRAFT" for Advanced PO
+            payload["Order"] = {
+                "Status": "DRAFT",
+                "Lines": lines,
+                "AdditionalCharges": additional_charges,
+            }
+            if memo is not None:
+                payload["Order"]["Memo"] = memo
+            logger.debug("Restructured payload: moved Lines into Order object (Advanced PO)")
+        elif "Order" in payload and isinstance(payload["Order"], dict):
+            # Ensure Order.Status is set for Advanced PO
+            if "Status" not in payload["Order"]:
+                payload["Order"]["Status"] = "DRAFT"
+                logger.debug("Set Order.Status to DRAFT for Advanced PO")
 
         try:
-            response = await self.client.post("Purchase", json=purchase_order)
+            response = await self.client.post("Purchase", json=payload)
             logger.debug("Cin7 API POST Purchase response status: %d", response.status_code)
             logger.debug("Cin7 API response headers: %s", dict(response.headers))
             logger.debug("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
