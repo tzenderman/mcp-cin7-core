@@ -505,20 +505,21 @@ class Cin7Client:
         )
 
     async def save_sale(self, sale: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new Sale via POST Sale.
+        """Create a new Sale via two-step Cin7 API process.
 
-        Provide the full sale payload as required by Cin7 Core.
-        The Status field should be set to "DRAFT" to allow user review before authorization.
+        The Cin7 API requires a two-step process for creating Sales with line items:
+        1. POST to /Sale - creates the base sale header, returns ID
+        2. POST to /sale/order - adds order lines using the SaleID (when SkipQuote=true)
 
-        The payload can have Lines at the top level (convenience) or nested under Quote.
-        This method normalizes the structure before sending to the API.
+        The payload can have Lines at the top level (convenience) which will be extracted
+        and sent in the second API call.
 
         Key fields:
         - Customer or CustomerID (required)
         - Location (required)
         - Lines array with product details
         - Status: DRAFT or AUTHORISED (defaults to DRAFT)
-        - SkipQuote: false (default) to create Quote first, true to skip to Order
+        - SkipQuote: true to skip Quote stage and go directly to Order
 
         Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/post
         """
@@ -528,17 +529,24 @@ class Cin7Client:
         # Make a copy to avoid mutating the original
         payload = dict(sale)
 
+        # Extract Lines for the second API call (if present)
+        lines = payload.pop("Lines", None)
+        additional_charges = payload.pop("AdditionalCharges", [])
+        order_memo = payload.pop("Memo", None)
+
         # Ensure Status is DRAFT for new sales (unless explicitly AUTHORISED)
         if "Status" not in payload:
             payload["Status"] = "DRAFT"
 
-        # Cin7 API expects Lines at top level for Sale POST (unlike Purchase which nests under Order)
-        # The Sale endpoint accepts Lines directly in the payload
+        # Default to SkipQuote=true to go directly to Order stage
+        if "SkipQuote" not in payload:
+            payload["SkipQuote"] = True
 
         try:
+            # STEP 1: Create the base sale header (without lines)
+            logger.debug("Step 1: Creating base sale header")
             response = await self.client.post("Sale", json=payload)
             logger.debug("Cin7 API POST Sale response status: %d", response.status_code)
-            logger.debug("Cin7 API response headers: %s", dict(response.headers))
             logger.debug("Cin7 API response body (first 1000 chars): %s", response.text[:1000] if response.text else "(empty)")
 
             try:
@@ -547,14 +555,58 @@ class Cin7Client:
                 logger.error("Failed to parse Cin7 response as JSON: %s", str(json_error))
                 data = {"raw": _truncate(response.text or "")}
 
-            if response.status_code in (200, 201):
-                logger.debug("Sale save successful, returning data")
-                return data if isinstance(data, dict) else {"result": data}
+            if response.status_code not in (200, 201):
+                error_msg = f"Sale header creation error: {response.status_code} {response.text[:500]}"
+                logger.error("Sale header creation failed: %s", error_msg)
+                raise Cin7ClientError(error_msg)
 
-            error_msg = f"Sale save error: {response.status_code} {response.text[:500]}"
-            logger.error("Sale save failed: %s", error_msg)
-            logger.debug("Full response text: %s", response.text)
-            raise Cin7ClientError(error_msg)
+            # Extract SaleID from response for step 2
+            sale_id = data.get("ID")
+            if not sale_id:
+                logger.error("No ID returned from Sale creation: %s", data)
+                raise Cin7ClientError("No ID returned from Sale creation")
+
+            logger.debug("Step 1 complete: Created sale with ID=%s", sale_id)
+
+            # STEP 2: Add order lines (if we have any)
+            if lines:
+                logger.debug("Step 2: Adding %d order lines to SaleID=%s", len(lines), sale_id)
+
+                order_payload = {
+                    "SaleID": sale_id,
+                    "Status": "DRAFT",
+                    "Lines": lines,
+                }
+                if additional_charges:
+                    order_payload["AdditionalCharges"] = additional_charges
+                if order_memo:
+                    order_payload["Memo"] = order_memo
+
+                order_response = await self.client.post("sale/order", json=order_payload)
+                logger.debug("Cin7 API POST sale/order response status: %d", order_response.status_code)
+                logger.debug("Cin7 API response body (first 1000 chars): %s", order_response.text[:1000] if order_response.text else "(empty)")
+
+                try:
+                    order_data = order_response.json()
+                except Exception as json_error:
+                    logger.error("Failed to parse order response as JSON: %s", str(json_error))
+                    order_data = {"raw": _truncate(order_response.text or "")}
+
+                if order_response.status_code not in (200, 201):
+                    error_msg = f"Sale order lines creation error: {order_response.status_code} {order_response.text[:500]}"
+                    logger.error("Sale order lines creation failed: %s", error_msg)
+                    raise Cin7ClientError(error_msg)
+
+                logger.debug("Step 2 complete: Added order lines successfully")
+
+                # Return the combined result with order data
+                if isinstance(order_data, dict):
+                    data["Order"] = order_data
+                    return data
+                return data
+
+            logger.debug("Sale save successful (no lines), returning data")
+            return data if isinstance(data, dict) else {"result": data}
 
         except Cin7ClientError:
             raise
