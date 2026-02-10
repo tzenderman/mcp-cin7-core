@@ -593,7 +593,7 @@ class Cin7Client:
                     order_data = {"raw": _truncate(order_response.text or "")}
 
                 if order_response.status_code not in (200, 201):
-                    error_msg = f"Sale order lines creation error: {order_response.status_code} {order_response.text[:500]}"
+                    error_msg = f"Sale order lines creation error (orphaned SaleID={sale_id}): {order_response.status_code} {order_response.text[:500]}"
                     logger.error("Sale order lines creation failed: %s", error_msg)
                     raise Cin7ClientError(error_msg)
 
@@ -793,7 +793,7 @@ class Cin7Client:
                     order_data = {"raw": _truncate(order_response.text or "")}
 
                 if order_response.status_code not in (200, 201):
-                    error_msg = f"Purchase Order lines creation error: {order_response.status_code} {order_response.text[:500]}"
+                    error_msg = f"Purchase Order lines creation error (orphaned TaskID={task_id}): {order_response.status_code} {order_response.text[:500]}"
                     logger.error("Purchase Order lines creation failed: %s", error_msg)
                     raise Cin7ClientError(error_msg)
 

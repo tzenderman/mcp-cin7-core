@@ -100,6 +100,111 @@ If `ALLOWED_EMAILS` is empty or not set, all authenticated users are allowed.
 uv run python -c "import mcp_cin7_core.mcp_server; print('OK')"
 ```
 
+## Testing
+
+### Running Tests
+
+```bash
+# Full test suite
+uv run pytest -v
+
+# Quick pass/fail check
+uv run pytest --tb=short
+
+# Specific test file
+uv run pytest tests/test_cin7_client.py -v
+
+# Specific test class or method
+uv run pytest tests/test_cin7_client.py::TestGetProduct -v
+uv run pytest tests/test_cin7_client.py::TestGetProduct::test_returns_product_by_sku -v
+```
+
+### Test Structure
+
+```
+tests/
+  conftest.py                  # Shared fixtures (mock_client, mock_cin7_class, mock_response)
+  fixtures/                    # Centralized mock API responses
+    __init__.py
+    common.py                  # Me, health check, error responses
+    products.py                # Product API responses
+    suppliers.py               # Supplier API responses
+    sales.py                   # Sale API responses
+    purchase_orders.py         # Purchase order API responses
+    stock.py                   # Stock availability responses
+    stock_transfers.py         # Stock transfer API responses
+  test_cin7_client.py          # Client method tests (HTTP mocking)
+  test_mcp_server.py           # MCP tool tests (client mocking)
+  test_mcp_resources.py        # MCP resource handler tests
+  test_mcp_prompts.py          # MCP prompt function tests
+  test_mcp_snapshots.py        # Product + stock snapshot lifecycle tests
+  test_http_server.py          # HTTP server endpoint tests
+```
+
+### Test-Driven Development Workflow
+
+When adding a new Cin7 API endpoint, follow this order:
+
+1. **Add mock data** to `tests/fixtures/` for the new endpoint's API responses
+2. **Write client tests** in `test_cin7_client.py`:
+   - Mock the HTTP layer (`mock_client.client.get/post/put = AsyncMock(...)`)
+   - Verify correct URL, params, and payload sent
+   - Verify response parsing and error handling
+3. **Write MCP tool tests** in `test_mcp_server.py`:
+   - Mock the client layer (`mock_instance.method = AsyncMock(...)`)
+   - Verify correct client method called with right args
+   - Verify field projection applied (if applicable)
+   - Verify `aclose()` always called
+4. **Implement the client method** in `cin7_client.py`
+5. **Implement the MCP tool** in `mcp_server.py`
+6. **Run `uv run pytest`** to verify all tests pass
+7. **Add resource/prompt tests** if the endpoint has templates or workflow guides
+
+### Test Patterns
+
+**Client test** (mock HTTP, verify params/responses/errors):
+```python
+async def test_list_products_with_name_filter(self, mock_client):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = PRODUCT_LIST_RESPONSE
+    mock_client.client.get = AsyncMock(return_value=mock_resp)
+
+    result = await mock_client.list_products(name="Widget")
+
+    call_args = mock_client.client.get.call_args
+    params = call_args.kwargs.get("params", {})
+    assert params["Name"] == "Widget"
+    assert "Products" in result
+```
+
+**MCP tool test** (mock client, verify delegation/projection/cleanup):
+```python
+async def test_cin7_products_default_projection(self, mock_cin7_class):
+    mock_class, mock_instance = mock_cin7_class
+    mock_instance.list_products = AsyncMock(return_value=PRODUCT_LIST_RESPONSE)
+
+    from mcp_cin7_core.mcp_server import cin7_products
+    result = await cin7_products()
+
+    item = result["Products"][0]
+    assert "SKU" in item
+    assert "Name" in item
+    assert "Brand" not in item  # Excluded by default projection
+    mock_instance.aclose.assert_called_once()
+```
+
+### Mock Data Fixtures
+
+All mock data lives in `tests/fixtures/` modules. Each module exports constants representing realistic API responses. Import them in tests:
+
+```python
+from tests.fixtures.products import PRODUCT_LIST_RESPONSE, PRODUCT_SINGLE
+from tests.fixtures.suppliers import SUPPLIER_SINGLE
+```
+
+To add new fixtures: create constants in the appropriate module following the existing naming pattern (`<ENTITY>_<VARIANT>`).
+
 ## Running the Server
 
 ### MCP HTTP Server (for web access and Claude Desktop)
