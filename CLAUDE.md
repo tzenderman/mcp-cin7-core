@@ -2,40 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
-
-This is an MCP (Model Context Protocol) server that provides access to the Cin7 Core (DEAR) inventory management API. The server uses **MCP Streamable HTTP transport** for web-based communication.
-
-The project wraps the Cin7 Core API to enable AI-powered inventory management operations including products, suppliers, and sales management.
-
-## Development Setup
-
-### Initial Setup
-
-```bash
-# Create virtual environment and install dependencies (requires uv)
-uv venv
-uv pip install -e .
-```
-
-### Environment Configuration
-
-Copy `.env.example` to `.env` and configure:
-- `CIN7_ACCOUNT_ID` - Cin7 Core account identifier
-- `CIN7_API_KEY` - Cin7 Core API application key
-- `SCALEKIT_ENVIRONMENT_URL` - ScaleKit environment URL (e.g., `https://yourapp.scalekit.com`)
-- `SCALEKIT_CLIENT_ID` - ScaleKit application client ID
-- `SCALEKIT_CLIENT_SECRET` - ScaleKit application client secret
-- `SCALEKIT_RESOURCE_ID` - ScaleKit resource identifier (e.g., `res_xxx`)
-- `SCALEKIT_INTERCEPTOR_SECRET` - Secret for verifying interceptor payloads (from ScaleKit Dashboard > Interceptors)
-- `ALLOWED_EMAILS` - Comma-separated list of allowed email addresses (leave empty to allow all)
-- `SERVER_URL` - Your MCP server's public URL (e.g., `https://mcp-cin7-core.onrender.com`)
-- `CIN7_BASE_URL` - (Optional) Defaults to `https://inventory.dearsystems.com/ExternalApi/v2/`
-- `MCP_LOG_LEVEL` - (Optional) Logging level (default: INFO)
-
-The server automatically searches for `.env` in the current directory, falling back to the project root if not found.
-
-### ScaleKit Configuration
+## ScaleKit Configuration
 
 Register your MCP server in the ScaleKit dashboard:
 
@@ -92,13 +59,6 @@ ALLOWED_EMAILS=alice@example.com,bob@example.com,admin@company.org
 ```
 
 If `ALLOWED_EMAILS` is empty or not set, all authenticated users are allowed.
-
-### Validation
-
-```bash
-# Quick import check
-uv run python -c "import mcp_cin7_core.mcp_server; print('OK')"
-```
 
 ## Testing
 
@@ -205,88 +165,6 @@ from tests.fixtures.suppliers import SUPPLIER_SINGLE
 
 To add new fixtures: create constants in the appropriate module following the existing naming pattern (`<ENTITY>_<VARIANT>`).
 
-## Running the Server
-
-### MCP HTTP Server (for web access and Claude Desktop)
-
-```bash
-# Using uvicorn
-uv run uvicorn mcp_cin7_core.http_server:app --host 0.0.0.0 --port 8000 --reload
-
-# Using the main entrypoint
-uv run python -m mcp_cin7_core.http_server
-```
-
-The server provides:
-- **Health endpoint**: `GET /health` (no auth required)
-- **OAuth discovery**: `GET /.well-known/oauth-protected-resource` (no auth required)
-- **MCP endpoint**: `/mcp` (requires OAuth 2.0 authentication via ScaleKit)
-  - Supports both batch (JSON) and streaming (SSE) responses
-  - Built-in session management
-  - Full MCP protocol support (tools, resources, prompts)
-
-### Stdio Server (for Claude Desktop local testing)
-
-```bash
-# Run via Python module
-uv run python -m mcp_cin7_core.stdio_server
-```
-
-The stdio server provides the same MCP tools, resources, and prompts as the HTTP server, but uses stdio transport for direct integration with Claude Desktop.
-
-**Claude Desktop Configuration:**
-
-Add this to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "cin7-core": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/absolute/path/to/mcp-cin7-core",
-        "run",
-        "python",
-        "-m",
-        "mcp_cin7_core.stdio_server"
-      ],
-      "env": {
-        "CIN7_ACCOUNT_ID": "your-account-id",
-        "CIN7_API_KEY": "your-api-key"
-      }
-    }
-  }
-}
-```
-
-Replace `/absolute/path/to/mcp-cin7-core` with the actual path to your clone of this repository.
-
-**Environment Variables:**
-- Required: `CIN7_ACCOUNT_ID`, `CIN7_API_KEY`
-- Optional: `MCP_LOG_LEVEL`, `MCP_LOG_FILE`, `CIN7_BASE_URL`
-- Not needed: `SCALEKIT_*` (stdio uses Cin7 credentials directly, no OAuth)
-
-**Note:** The stdio server is intended for local development and testing only. For production deployments accessible via web, use the HTTP server with OAuth authentication.
-
-### Testing MCP endpoints
-
-```bash
-# Test health (no auth required)
-curl http://localhost:8000/health
-
-# Test OAuth discovery (no auth required)
-curl http://localhost:8000/.well-known/oauth-protected-resource
-
-# Test without auth (expect 401 with WWW-Authenticate header)
-curl -i http://localhost:8000/mcp -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
-
-# For full MCP protocol testing with OAuth flow, use MCP Inspector
-npx @modelcontextprotocol/inspector http://localhost:8000/mcp
-```
-
 ## Architecture
 
 ### Core Components
@@ -354,31 +232,6 @@ try:
 finally:
     await client.aclose()
 ```
-
-### Resource System
-
-Products and suppliers have MCP resources for templates:
-
-**Product Resources:**
-- `cin7://templates/product` - Blank product template with all fields
-- `cin7://templates/product/{product_id}` - Existing product as template
-- `cin7://templates/product/sku/{sku}` - Product by SKU as template
-
-**Supplier Resources:**
-- `cin7://templates/supplier` - Blank supplier template with all fields
-- `cin7://templates/supplier/{supplier_id}` - Existing supplier as template
-- `cin7://templates/supplier/name/{name}` - Supplier by name as template
-
-Resources are read via MCP `resources/read` method and return JSON data suitable for create/update operations.
-
-### Prompt System
-
-Workflow guidance prompts:
-- `create_product` - Step-by-step guide for creating Cin7 products with all required fields
-- `update_batch` - Guide for batch updating products with proper error handling
-- `verify_required_fields` - Checklist to verify product data completeness before submission
-
-Prompts are retrieved via MCP `prompts/get` method.
 
 ### Logging
 
@@ -469,86 +322,11 @@ For large catalogs, use the snapshot workflow:
    - `Price` (unit price)
    - `Tax` (tax amount)
    - `TaxRule` (tax rule name, e.g., "Tax Exempt")
-   - `Total` (line total for validation: (Price × Quantity) - Discount + Tax)
+   - `Total` (line total for validation: (Price x Quantity) - Discount + Tax)
 6. Create: `cin7_create_purchase_order(payload)`
 7. **Important**: All POs are automatically created with `Status="DRAFT"` to allow review before authorization
 8. User reviews and authorizes the PO in Cin7 Core web interface
 9. Use `create_purchase_order` prompt for step-by-step guidance
-
-## MCP Protocol Reference
-
-### Available MCP Tools
-
-**Status & Auth:**
-- `cin7_status()` - Validate credentials with lightweight API call
-- `cin7_me()` - Get account/user information
-
-**Products:**
-- `cin7_products(page, limit, name, sku, fields)` - List with pagination and filters
-- `cin7_get_product(product_id, sku)` - Get single product
-- `cin7_create_product(payload)` - Create new product
-- `cin7_update_product(payload)` - Update existing product
-
-**Product Snapshots:**
-- `cin7_products_snapshot_start(page, limit, name, sku, fields)` - Start background build
-- `cin7_products_snapshot_status(snapshot_id)` - Check build progress
-- `cin7_products_snapshot_chunk(snapshot_id, offset, limit)` - Fetch chunk
-- `cin7_products_snapshot_close(snapshot_id)` - Clean up
-
-**Suppliers:**
-- `cin7_suppliers(page, limit, name)` - List with pagination
-- `cin7_get_supplier(supplier_id, name)` - Get single supplier
-- `cin7_create_supplier(payload)` - Create new supplier
-- `cin7_update_supplier(payload)` - Update existing supplier
-
-**Sales:**
-- `cin7_sales(page, limit, search, fields)` - List sales (returns Order, SaleOrderNumber, Customer, Location by default)
-
-**Purchase Orders:**
-- `cin7_purchase_orders(page, limit, search, fields)` - List purchase orders (returns TaskID, Supplier, Status, OrderDate, Location by default)
-- `cin7_get_purchase_order(purchase_order_id)` - Get single purchase order
-- `cin7_create_purchase_order(payload)` - Create new purchase order (always created as DRAFT status)
-
-**Stock Availability:**
-- `cin7_stock_levels(page, limit, location, fields)` - List stock levels across all products/locations
-- `cin7_get_stock(sku, product_id)` - Get stock levels for a single product
-
-**Stock Availability Snapshots:**
-- `cin7_stock_snapshot_start(page, limit, location, fields)` - Start background build
-- `cin7_stock_snapshot_status(snapshot_id)` - Check build progress
-- `cin7_stock_snapshot_chunk(snapshot_id, offset, limit)` - Fetch chunk
-- `cin7_stock_snapshot_close(snapshot_id)` - Clean up
-
-### Available MCP Resources
-
-**Product Templates:**
-- `cin7://templates/product` - Blank product template
-- `cin7://templates/product/{product_id}` - Existing product by ID
-- `cin7://templates/product/sku/{sku}` - Existing product by SKU
-
-**Supplier Templates:**
-- `cin7://templates/supplier` - Blank supplier template
-- `cin7://templates/supplier/{supplier_id}` - Existing supplier by ID
-- `cin7://templates/supplier/name/{name}` - Existing supplier by name
-
-**Purchase Order Templates:**
-- `cin7://templates/purchase_order` - Blank purchase order template
-- `cin7://templates/purchase_order/{purchase_order_id}` - Existing purchase order by ID
-
-### Available MCP Prompts
-
-- `create_product` - Product creation workflow guide
-- `update_batch` - Batch update workflow guide
-- `verify_required_fields` - Required fields checklist
-- `create_purchase_order` - Purchase order creation workflow guide
-
-## Cin7 Core API Reference
-
-- Base URL: https://inventory.dearsystems.com/ExternalApi/v2/
-- Products: https://dearinventory.docs.apiary.io/#reference/product
-- Suppliers: https://dearinventory.docs.apiary.io/#reference/supplier
-- Sales: https://dearinventory.docs.apiary.io/#reference/sale
-- Purchase Orders: https://dearinventory.docs.apiary.io/#reference/purchase
 
 ## Development Notes
 
