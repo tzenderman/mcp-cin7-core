@@ -1,86 +1,112 @@
-# mcp-cin7-core
+# Cin7 Core MCP Server
 
-Model Context Protocol (MCP) server for Cin7 Core (DEAR) API using MCP Streamable HTTP transport.
+This is a Model Context Protocol (MCP) server implementation for [Cin7 Core](https://www.cin7.com/cin7-core/) (formerly DEAR Inventory). It provides a bridge between the MCP protocol and Cin7 Core's API, allowing for standardized access to Cin7 Core's inventory management features.
 
 ## Features
 
-- **MCP Streamable HTTP** - Web-based MCP transport with Bearer token authentication
-- **15 Tools** - CRUD operations for products, suppliers, sales, and snapshots
-- **6 Resources** - Template resources for products and suppliers
-- **3 Prompts** - Workflow guides for product operations
-- **Full Cin7 Core API integration** - Async HTTP client with logging and error handling
+- Product management (CRUD, search, bulk snapshots for large catalogs)
+- Supplier management
+- Sales order management
+- Purchase order management
+- Stock level lookups and bulk stock snapshots
+- Stock transfer lookups
+- Template resources for creating and updating records
+- Workflow prompts for guided product and order creation
+- MCP protocol compliance
+
+## Prerequisites
+
+- Python 3.10+
+- [uv](https://docs.astral.sh/uv/) package manager
+- A [Cin7 Core](https://www.cin7.com/cin7-core/) account with API credentials
+
+## Docs and Links
+
+- [Cin7 Core API Documentation](https://dearinventory.docs.apiary.io/)
+- [Cin7 Core Products API](https://dearinventory.docs.apiary.io/#reference/product)
+- [Cin7 Core Suppliers API](https://dearinventory.docs.apiary.io/#reference/supplier)
+- [Cin7 Core Sales API](https://dearinventory.docs.apiary.io/#reference/sale)
+- [Cin7 Core Purchase Orders API](https://dearinventory.docs.apiary.io/#reference/purchase)
+- [MCP Protocol Specification](https://modelcontextprotocol.io/)
 
 ## Setup
 
-1. Create venv and install dependencies (requires `uv`):
+### Create a Cin7 Core Account
 
-```bash
-uv venv
-uv pip install -r requirements.txt
-uv pip install -e .
-```
+If you don't already have a Cin7 Core account, you can sign up at [cin7.com](https://www.cin7.com/cin7-core/). You'll need API credentials to connect this server to your account.
 
-2. Copy `.env.example` to `.env` and fill credentials:
+To generate API credentials, go to **Integrations > API** in your Cin7 Core dashboard and create a new application key. You'll need:
+- **Account ID** - Your Cin7 Core account identifier
+- **API Key** - Your application key
 
-```bash
-cp .env.example .env
-# Edit .env to set:
-# - CIN7_ACCOUNT_ID
-# - CIN7_API_KEY  
-# - AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET (for OAuth)
-```
+### Authentication
 
-3. Quick import check:
+There are 2 modes of running the Cin7 Core MCP server:
 
-```bash
-uv run python -c "import mcp_cin7_core.mcp_server; print('OK')"
-```
+#### 1. Streamable HTTP with OAuth (Recommended for production)
 
-## Environment Variables
+This mode runs the server as a web service with OAuth 2.0 authentication via [ScaleKit](https://scalekit.com/). This is the recommended approach for shared or remote deployments, including connecting via Claude Desktop's remote MCP connector.
 
-**Required:**
+**Required environment variables:**
 - `CIN7_ACCOUNT_ID` - Cin7 Core account identifier
 - `CIN7_API_KEY` - Cin7 Core API application key
-- `AUTH0_DOMAIN` - Auth0 tenant domain (e.g., `dev-abc123.us.auth0.com`)
-- `AUTH0_CLIENT_ID` - Auth0 application client ID
-- `AUTH0_CLIENT_SECRET` - Auth0 application client secret
-- `AUTH0_AUDIENCE` - Auth0 API audience (usually your Auth0 API URL)
+- `SCALEKIT_ENVIRONMENT_URL` - ScaleKit environment URL (e.g., `https://yourapp.scalekit.com`)
+- `SCALEKIT_CLIENT_ID` - ScaleKit application client ID
+- `SCALEKIT_CLIENT_SECRET` - ScaleKit application client secret
+- `SCALEKIT_RESOURCE_ID` - ScaleKit resource identifier (e.g., `res_xxx`)
+- `SCALEKIT_INTERCEPTOR_SECRET` - Secret for verifying interceptor payloads
+- `SERVER_URL` - Your MCP server's public URL (e.g., `https://mcp-cin7-core.onrender.com`)
 
 **Optional:**
+- `ALLOWED_EMAILS` - Comma-separated list of allowed email addresses (leave empty to allow all authenticated users)
 - `CIN7_BASE_URL` - Defaults to `https://inventory.dearsystems.com/ExternalApi/v2/`
-- `MCP_LOG_LEVEL` - Log level (default: INFO)
+- `MCP_LOG_LEVEL` - Logging level (default: INFO)
 - `MCP_LOG_FILE` - Enable file logging with rotation
 
-## Running the Server
-
-### Local Development
-
+**Running the server:**
 ```bash
-uv run uvicorn mcp_cin7_core.http_server:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn mcp_cin7_core.http_server:app --host 0.0.0.0 --port 8000
 ```
 
-### Production (Render)
+**Endpoints:**
+- `GET /health` - Health check (no auth required)
+- `GET /.well-known/oauth-protected-resource` - OAuth discovery (no auth required)
+- `POST /mcp` - MCP endpoint (requires OAuth 2.0 Bearer token)
 
-The server is deployed on Render and configured via `render.yaml`. Environment variables are managed in the Render dashboard.
+**Connecting from Claude Desktop (remote):**
+1. Deploy your server (e.g., to Render)
+2. Open **Claude Desktop** > **Settings** > **Connectors**
+3. Click **"Add Connector"** and enter your server URL: `https://your-server.com/mcp`
+4. Claude will auto-discover OAuth configuration
+5. Click **"Authorize"** and log in
 
-Base URL: `https://mcp-cin7-core.onrender.com`
+See [CLAUDE.md](CLAUDE.md) for detailed ScaleKit setup and interceptor configuration.
 
-## Local Development with Claude Desktop
+#### 2. Stdio Transport (Local development)
 
-For local testing with Claude Desktop, use the stdio transport:
+This mode runs the server locally using stdio transport for direct integration with Claude Desktop. No OAuth configuration needed -- Cin7 credentials are used directly.
 
-```bash
-uv run python -m mcp_cin7_core.stdio_server
-```
+**Required environment variables:**
+- `CIN7_ACCOUNT_ID` - Cin7 Core account identifier
+- `CIN7_API_KEY` - Cin7 Core API application key
 
-Configure in Claude Desktop's `claude_desktop_config.json`:
+**Claude Desktop configuration:**
+
+Add this to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "cin7-core": {
       "command": "uv",
-      "args": ["--directory", "/path/to/mcp-cin7-core", "run", "python", "-m", "mcp_cin7_core.stdio_server"],
+      "args": [
+        "--directory",
+        "/absolute/path/to/mcp-cin7-core",
+        "run",
+        "python",
+        "-m",
+        "mcp_cin7_core.stdio_server"
+      ],
       "env": {
         "CIN7_ACCOUNT_ID": "your-account-id",
         "CIN7_API_KEY": "your-api-key"
@@ -90,123 +116,106 @@ Configure in Claude Desktop's `claude_desktop_config.json`:
 }
 ```
 
-No OAuth configuration needed for local stdio transport. See [CLAUDE.md](CLAUDE.md) for detailed setup instructions.
+Replace `/absolute/path/to/mcp-cin7-core` with the actual path to your clone of this repository.
 
-## Testing the Server
-
-### Health Check
+### Installation
 
 ```bash
-curl http://localhost:8000/health
+# Create virtual environment and install dependencies
+uv venv
+uv pip install -e .
+
+# Quick import check
+uv run python -c "import mcp_cin7_core.mcp_server; print('OK')"
 ```
 
-### Testing with MCP Inspector (Recommended)
-
-The MCP Streamable HTTP transport requires session management and OAuth authentication. We recommend using the **MCP Inspector** for local testing.
-
-**Quick test with curl (health check only):**
-```bash
-curl http://localhost:8000/health
-# Expected: {"status": "ok", "transport": "streamable-http"}
-```
-
-**OAuth discovery endpoint:**
-```bash
-curl http://localhost:8000/.well-known/mcp-oauth
-# Returns Auth0 OAuth configuration for MCP clients
-```
-
-## Testing with MCP Inspector
-
-Test your local server with the MCP Inspector:
+### Testing with MCP Inspector
 
 ```bash
+# Start the HTTP server
+uv run uvicorn mcp_cin7_core.http_server:app --host 0.0.0.0 --port 8000
+
+# In another terminal, open MCP Inspector
 npx @modelcontextprotocol/inspector http://localhost:8000/mcp
 ```
 
-The Inspector provides a UI to:
-- List and call all 15 tools
-- Read all 6 resources
-- View all 3 prompts
-- Test the complete MCP protocol
-- Test OAuth flow (requires running server with Auth0 configured)
-
-## Claude Desktop Integration (Remote Connector)
-
-**Note:** Claude Desktop supports remote MCP servers for Pro, Max, Team, and Enterprise plans.
-
-### Adding Your Server to Claude Desktop
-
-1. Deploy your server to Render (see Deployment section below)
-2. Open **Claude Desktop** → **Settings** → **Connectors**
-3. Click **"Add Connector"**
-4. Enter your server URL: `https://mcp-cin7-core.onrender.com/mcp`
-5. Claude will auto-discover your OAuth configuration
-6. Click **"Authorize"** and log in with your Auth0 account
-7. Done! Your Cin7 tools are now available in Claude Desktop
-
-**Access Control:**
-- Only whitelisted email addresses can authenticate (configured in Auth0)
-- OAuth tokens are managed automatically by Claude Desktop
-- Cin7 credentials stay secure on the server
-
-## MCP Capabilities
-
-### Tools (15)
+## Available MCP Tools
 
 **Status & Auth:**
-- `cin7_status` - Validate credentials
-- `cin7_me` - Get account information
+- `cin7_status` - Validate API credentials
+- `cin7_me` - Get account/user information
 
 **Products:**
-- `cin7_products` - List products with pagination and filters
-- `cin7_get_product` - Get single product by ID or SKU
-- `cin7_create_product` - Create new product
-- `cin7_update_product` - Update existing product
+- `cin7_products` - List products with pagination, filters, and field projection
+- `cin7_get_product` - Get a single product by ID or SKU
+- `cin7_create_product` - Create a new product
+- `cin7_update_product` - Update an existing product
 
 **Product Snapshots** (for large catalogs):
-- `cin7_products_snapshot_start` - Start background build
+- `cin7_products_snapshot_start` - Start background snapshot build
 - `cin7_products_snapshot_status` - Check build progress
 - `cin7_products_snapshot_chunk` - Fetch paginated results
-- `cin7_products_snapshot_close` - Clean up
+- `cin7_products_snapshot_close` - Clean up snapshot
 
 **Suppliers:**
-- `cin7_suppliers` - List suppliers
-- `cin7_get_supplier` - Get single supplier
-- `cin7_create_supplier` - Create supplier
-- `cin7_update_supplier` - Update supplier
+- `cin7_suppliers` - List suppliers with pagination
+- `cin7_get_supplier` - Get a single supplier by ID or name
+- `cin7_create_supplier` - Create a new supplier
+- `cin7_update_supplier` - Update an existing supplier
 
 **Sales:**
-- `cin7_sales` - List sales with pagination
+- `cin7_sales` - List sales with pagination and filters
+- `cin7_get_sale` - Get a single sale
+- `cin7_create_sale` - Create a new sale
+- `cin7_update_sale` - Update an existing sale
 
-### Resources (6)
+**Purchase Orders:**
+- `cin7_purchase_orders` - List purchase orders with pagination
+- `cin7_get_purchase_order` - Get a single purchase order
+- `cin7_create_purchase_order` - Create a new purchase order (always created as DRAFT)
 
-**Product Templates:**
-- `cin7://templates/product` - Blank product template
-- `cin7://templates/product/{product_id}` - Existing product by ID
-- `cin7://templates/product/sku/{sku}` - Existing product by SKU
+**Stock:**
+- `cin7_stock_levels` - List stock levels across all products and locations
+- `cin7_get_stock` - Get stock levels for a single product
+- `cin7_stock_transfers` - List stock transfers
+- `cin7_get_stock_transfer` - Get a single stock transfer
 
-**Supplier Templates:**
-- `cin7://templates/supplier` - Blank supplier template
-- `cin7://templates/supplier/{supplier_id}` - Existing supplier by ID
-- `cin7://templates/supplier/name/{name}` - Existing supplier by name
+**Stock Snapshots** (for large catalogs):
+- `cin7_stock_snapshot_start` - Start background snapshot build
+- `cin7_stock_snapshot_status` - Check build progress
+- `cin7_stock_snapshot_chunk` - Fetch paginated results
+- `cin7_stock_snapshot_close` - Clean up snapshot
 
-### Prompts (3)
+For detailed API documentation, refer to the [MCP Protocol Specification](https://modelcontextprotocol.io/).
 
-- `create_product` - Step-by-step guide for creating products
-- `update_batch` - Batch update workflow with error handling
-- `verify_required_fields` - Required fields checklist
+## For Developers
 
-## Architecture
+### Running Tests
+
+```bash
+# Full test suite
+uv run pytest -v
+
+# Quick pass/fail check
+uv run pytest --tb=short
+
+# Specific test file
+uv run pytest tests/test_cin7_client.py -v
+```
+
+### Architecture
 
 - **`cin7_client.py`** - Async HTTP client for Cin7 Core API
 - **`mcp_server.py`** - FastMCP server with tools, resources, and prompts
-- **`http_server.py`** - FastAPI wrapper with MCP Streamable HTTP transport
+- **`http_server.py`** - FastAPI wrapper with MCP Streamable HTTP transport and OAuth
+- **`stdio_server.py`** - Stdio transport for local Claude Desktop integration
 
-See `CLAUDE.md` for detailed architecture documentation.
+See [CLAUDE.md](CLAUDE.md) for comprehensive development documentation, test patterns, and architecture details.
 
-## Documentation
+## Security
 
-- See `CLAUDE.md` for comprehensive development documentation
-- See `docs/plans/` for implementation plans and progress
-- Cin7 Core API docs: https://dearinventory.docs.apiary.io/
+Do not commit your `.env` file or any sensitive credentials to version control (it is included in `.gitignore` as a safe default).
+
+## License
+
+MIT
