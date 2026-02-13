@@ -7,7 +7,6 @@ import logging
 import os
 from typing import Optional
 
-import httpx
 from dotenv import load_dotenv
 from fastmcp.server.auth.providers.scalekit import ScalekitProvider
 from scalekit import ScalekitClient
@@ -17,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, Mount
 
-from .mcp_server import create_mcp_server
+from .server import create_mcp_server
 
 load_dotenv()
 
@@ -28,7 +27,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-logger = logging.getLogger("mcp_cin7_core.http_server")
+logger = logging.getLogger("cin7_core_server.http_server")
 
 # ScaleKit Configuration
 SCALEKIT_ENVIRONMENT_URL = os.getenv("SCALEKIT_ENVIRONMENT_URL")
@@ -36,7 +35,7 @@ SCALEKIT_CLIENT_ID = os.getenv("SCALEKIT_CLIENT_ID", "")
 SCALEKIT_CLIENT_SECRET = os.getenv("SCALEKIT_CLIENT_SECRET", "")
 SCALEKIT_RESOURCE_ID = os.getenv("SCALEKIT_RESOURCE_ID")
 SCALEKIT_INTERCEPTOR_SECRET = os.getenv("SCALEKIT_INTERCEPTOR_SECRET", "")
-SERVER_URL = os.getenv("SERVER_URL", "https://mcp-cin7-core.onrender.com")
+SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
 
 # Email allowlist for interceptors (comma-separated)
 ALLOWED_EMAILS_RAW = os.getenv("ALLOWED_EMAILS", "")
@@ -154,10 +153,10 @@ async def handle_pre_signup(request: Request) -> JSONResponse:
     except Exception as e:
         logger.error(f"[INTERCEPTOR] Error processing PRE_SIGNUP: {e}")
         # Fail closed - deny on error
-        return JSONResponse({
-            "decision": "DENY",
-            "error": {"message": "Internal error processing signup"}
-        })
+        return JSONResponse(
+            {"decision": "DENY", "error": {"message": "Internal error processing signup"}},
+            status_code=500,
+        )
 
 
 async def handle_pre_session_creation(request: Request) -> JSONResponse:
@@ -184,14 +183,7 @@ async def handle_pre_session_creation(request: Request) -> JSONResponse:
             )
 
         # Parse JSON body
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError as e:
-            logger.error(f"[INTERCEPTOR] Invalid JSON: {e}")
-            return JSONResponse({
-                "decision": "DENY",
-                "error": {"message": "Invalid JSON payload"}
-            }, status_code=400)
+        data = json.loads(body)
 
         # Extract email from interceptor context
         user_email = data.get("interceptor_context", {}).get("user_email", "")
@@ -217,61 +209,10 @@ async def handle_pre_session_creation(request: Request) -> JSONResponse:
     except Exception as e:
         logger.error(f"[INTERCEPTOR] Error processing PRE_SESSION_CREATION: {e}", exc_info=True)
         # Fail closed - deny on error
-        return JSONResponse({
-            "decision": "DENY",
-            "error": {"message": f"Internal error processing session: {str(e)}"}
-        })
-
-
-async def openid_configuration(request: Request) -> JSONResponse:
-    """Return OpenID Connect Discovery metadata.
-    
-    FastMCP's ScalekitProvider doesn't provide this endpoint, so we add it manually.
-    """
-    if not SCALEKIT_ENVIRONMENT_URL:
         return JSONResponse(
-            {"error": "OAuth not configured"},
-            status_code=501
+            {"decision": "DENY", "error": {"message": f"Internal error processing session: {str(e)}"}},
+            status_code=500,
         )
-
-    # Fetch the actual metadata from ScaleKit (same as oauth-authorization-server)
-    # ScaleKit provides this at the resource-specific endpoint
-    if SCALEKIT_RESOURCE_ID:
-        # Try to get it from ScaleKit's resource endpoint
-        try:
-            async with httpx.AsyncClient() as client:
-                url = f"{SCALEKIT_ENVIRONMENT_URL}/.well-known/oauth-authorization-server/resources/{SCALEKIT_RESOURCE_ID}"
-                response = await client.get(url, timeout=5.0)
-                if response.status_code == 200:
-                    metadata = response.json()
-                    # Add OpenID Connect specific fields
-                    metadata["userinfo_endpoint"] = f"{SCALEKIT_ENVIRONMENT_URL}/userinfo"
-                    metadata["subject_types_supported"] = ["public"]
-                    metadata["id_token_signing_alg_values_supported"] = ["RS256"]
-                    return JSONResponse(metadata)
-        except Exception as e:
-            logger.warning(f"Failed to fetch from ScaleKit: {e}")
-
-    # Fallback: construct metadata manually
-    authorization_endpoint = f"{SCALEKIT_ENVIRONMENT_URL}/oauth/authorize"
-    token_endpoint = f"{SCALEKIT_ENVIRONMENT_URL}/oauth/token"
-    jwks_uri = f"{SCALEKIT_ENVIRONMENT_URL}/keys"
-    userinfo_endpoint = f"{SCALEKIT_ENVIRONMENT_URL}/userinfo"
-    
-    return JSONResponse({
-        "issuer": SCALEKIT_ENVIRONMENT_URL,
-        "authorization_endpoint": authorization_endpoint,
-        "token_endpoint": token_endpoint,
-        "jwks_uri": jwks_uri,
-        "userinfo_endpoint": userinfo_endpoint,
-        "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
-        "scopes_supported": ["cin7:read", "cin7:write", "openid", "profile", "email"],
-        "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
-        "subject_types_supported": ["public"],
-        "id_token_signing_alg_values_supported": ["RS256"],
-    })
 
 
 async def health(request: Request) -> JSONResponse:
@@ -305,7 +246,6 @@ def create_app():
     app = Starlette(
         routes=[
             Route("/health", health, methods=["GET"]),
-            Route("/.well-known/openid-configuration", openid_configuration, methods=["GET"]),
             *interceptor_routes,
             Mount("/", app=mcp_app),  # Mount MCP app at root (FastMCP handles /mcp endpoint)
         ],

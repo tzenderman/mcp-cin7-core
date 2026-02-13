@@ -9,14 +9,14 @@ class TestCreateProductPrompt:
     """Tests for the create_product prompt."""
 
     async def test_returns_non_empty_string(self):
-        from mcp_cin7_core.mcp_server import create_product
+        from cin7_core_server.resources.prompts import create_product
 
         result = await create_product()
         assert isinstance(result, str)
         assert len(result) > 0
 
     async def test_mentions_required_fields(self):
-        from mcp_cin7_core.mcp_server import create_product
+        from cin7_core_server.resources.prompts import create_product
 
         result = await create_product()
         assert "SKU" in result
@@ -25,7 +25,7 @@ class TestCreateProductPrompt:
         assert "DefaultLocation" in result
 
     async def test_mentions_template_resource(self):
-        from mcp_cin7_core.mcp_server import create_product
+        from cin7_core_server.resources.prompts import create_product
 
         result = await create_product()
         assert "cin7://templates/product" in result
@@ -35,14 +35,14 @@ class TestUpdateBatchPrompt:
     """Tests for the update_batch prompt."""
 
     async def test_returns_non_empty_string(self):
-        from mcp_cin7_core.mcp_server import update_batch
+        from cin7_core_server.resources.prompts import update_batch
 
         result = await update_batch()
         assert isinstance(result, str)
         assert len(result) > 0
 
     async def test_mentions_error_handling(self):
-        from mcp_cin7_core.mcp_server import update_batch
+        from cin7_core_server.resources.prompts import update_batch
 
         result = await update_batch()
         lower = result.lower()
@@ -51,7 +51,7 @@ class TestUpdateBatchPrompt:
         assert "report" in lower or "summary" in lower
 
     async def test_mentions_approval_from_user(self):
-        from mcp_cin7_core.mcp_server import update_batch
+        from cin7_core_server.resources.prompts import update_batch
 
         result = await update_batch()
         assert "approval" in result.lower()
@@ -61,14 +61,14 @@ class TestVerifyRequiredFieldsPrompt:
     """Tests for the verify_required_fields prompt."""
 
     async def test_returns_non_empty_string(self):
-        from mcp_cin7_core.mcp_server import verify_required_fields
+        from cin7_core_server.resources.prompts import verify_required_fields
 
         result = await verify_required_fields()
         assert isinstance(result, str)
         assert len(result) > 0
 
     async def test_mentions_all_required_fields(self):
-        from mcp_cin7_core.mcp_server import verify_required_fields
+        from cin7_core_server.resources.prompts import verify_required_fields
 
         result = await verify_required_fields()
         assert "SKU" in result
@@ -85,14 +85,14 @@ class TestCreatePurchaseOrderPrompt:
     """Tests for the create_purchase_order prompt."""
 
     async def test_returns_non_empty_string(self):
-        from mcp_cin7_core.mcp_server import create_purchase_order
+        from cin7_core_server.resources.prompts import create_purchase_order
 
         result = await create_purchase_order()
         assert isinstance(result, str)
         assert len(result) > 0
 
     async def test_mentions_po_specific_fields(self):
-        from mcp_cin7_core.mcp_server import create_purchase_order
+        from cin7_core_server.resources.prompts import create_purchase_order
 
         result = await create_purchase_order()
         assert "Supplier" in result
@@ -101,7 +101,7 @@ class TestCreatePurchaseOrderPrompt:
         assert "Lines" in result
 
     async def test_mentions_draft_status(self):
-        from mcp_cin7_core.mcp_server import create_purchase_order
+        from cin7_core_server.resources.prompts import create_purchase_order
 
         result = await create_purchase_order()
         assert "DRAFT" in result
@@ -111,14 +111,14 @@ class TestCreateSalePrompt:
     """Tests for the create_sale prompt."""
 
     async def test_returns_non_empty_string(self):
-        from mcp_cin7_core.mcp_server import create_sale
+        from cin7_core_server.resources.prompts import create_sale
 
         result = await create_sale()
         assert isinstance(result, str)
         assert len(result) > 0
 
     async def test_mentions_sale_specific_fields(self):
-        from mcp_cin7_core.mcp_server import create_sale
+        from cin7_core_server.resources.prompts import create_sale
 
         result = await create_sale()
         assert "Customer" in result
@@ -126,7 +126,7 @@ class TestCreateSalePrompt:
         assert "Lines" in result
 
     async def test_mentions_draft_status(self):
-        from mcp_cin7_core.mcp_server import create_sale
+        from cin7_core_server.resources.prompts import create_sale
 
         result = await create_sale()
         assert "DRAFT" in result

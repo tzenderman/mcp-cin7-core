@@ -55,7 +55,7 @@ This mode runs the server as a web service with OAuth 2.0 authentication via [Sc
 - `SCALEKIT_CLIENT_SECRET` - ScaleKit application client secret
 - `SCALEKIT_RESOURCE_ID` - ScaleKit resource identifier (e.g., `res_xxx`)
 - `SCALEKIT_INTERCEPTOR_SECRET` - Secret for verifying interceptor payloads
-- `SERVER_URL` - Your MCP server's public URL (e.g., `https://mcp-cin7-core.onrender.com`)
+- `SERVER_URL` - Your MCP server's public URL (e.g., `https://your-server.example.com`)
 
 **Optional:**
 - `ALLOWED_EMAILS` - Comma-separated list of allowed email addresses (leave empty to allow all authenticated users)
@@ -65,7 +65,7 @@ This mode runs the server as a web service with OAuth 2.0 authentication via [Sc
 
 **Running the server:**
 ```bash
-uv run uvicorn mcp_cin7_core.http_server:app --host 0.0.0.0 --port 8000
+uv run uvicorn cin7_core_server.http_server:app --host 0.0.0.0 --port 8000
 ```
 
 **Endpoints:**
@@ -105,7 +105,7 @@ Add this to your `claude_desktop_config.json`:
         "run",
         "python",
         "-m",
-        "mcp_cin7_core.stdio_server"
+        "cin7_core_server.stdio_server"
       ],
       "env": {
         "CIN7_ACCOUNT_ID": "your-account-id",
@@ -126,14 +126,14 @@ uv venv
 uv pip install -e .
 
 # Quick import check
-uv run python -c "import mcp_cin7_core.mcp_server; print('OK')"
+uv run python -c "import cin7_core_server.mcp_server; print('OK')"
 ```
 
 ### Testing with MCP Inspector
 
 ```bash
 # Start the HTTP server
-uv run uvicorn mcp_cin7_core.http_server:app --host 0.0.0.0 --port 8000
+uv run uvicorn cin7_core_server.http_server:app --host 0.0.0.0 --port 8000
 
 # In another terminal, open MCP Inspector
 npx @modelcontextprotocol/inspector http://localhost:8000/mcp
@@ -202,6 +202,16 @@ uv run pytest --tb=short
 # Specific test file
 uv run pytest tests/test_cin7_client.py -v
 ```
+
+### Contributing — Test-Driven Development
+
+This project follows a strict **test-driven development (TDD)** workflow. Every Cin7 API endpoint is implemented with proper mocks before writing any production code:
+
+1. **Add mock data** to `tests/fixtures/` using real response shapes from the [Cin7 Core API docs](https://dearinventory.docs.apiary.io/)
+2. **Write failing tests** — client tests (mock HTTP layer) and MCP tool tests (mock client layer)
+3. **Implement the code** to make the tests pass
+
+No endpoint should be merged without corresponding test coverage. See [CLAUDE.md](CLAUDE.md) for detailed test patterns and examples.
 
 ### Architecture
 

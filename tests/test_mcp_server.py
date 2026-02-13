@@ -46,23 +46,12 @@ class TestCin7Status:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.health_check = AsyncMock(return_value=HEALTH_CHECK_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_status
+        from cin7_core_server.resources.auth import cin7_status
 
         result = await cin7_status()
 
         mock_instance.health_check.assert_called_once()
         assert result == HEALTH_CHECK_RESPONSE
-
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.health_check = AsyncMock(return_value=HEALTH_CHECK_RESPONSE)
-
-        from mcp_cin7_core.mcp_server import cin7_status
-
-        await cin7_status()
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -78,23 +67,12 @@ class TestCin7Me:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_me = AsyncMock(return_value=ME_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_me
+        from cin7_core_server.resources.auth import cin7_me
 
         result = await cin7_me()
 
         mock_instance.get_me.assert_called_once()
         assert result == ME_RESPONSE
-
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_me = AsyncMock(return_value=ME_RESPONSE)
-
-        from mcp_cin7_core.mcp_server import cin7_me
-
-        await cin7_me()
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -110,14 +88,14 @@ class TestCin7Products:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_products = AsyncMock(return_value=copy.deepcopy(PRODUCT_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_products
+        from cin7_core_server.resources.products import cin7_products
 
         result = await cin7_products(page=2, limit=50, name="Widget", sku="W-001")
 
         mock_instance.list_products.assert_called_once_with(
             page=2, limit=50, name="Widget", sku="W-001"
         )
-        mock_instance.aclose.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_default_projection_keeps_sku_and_name(self, mock_cin7_class):
@@ -125,7 +103,7 @@ class TestCin7Products:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_products = AsyncMock(return_value=copy.deepcopy(PRODUCT_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_products
+        from cin7_core_server.resources.products import cin7_products
 
         result = await cin7_products()
 
@@ -145,7 +123,7 @@ class TestCin7Products:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_products = AsyncMock(return_value=copy.deepcopy(PRODUCT_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_products
+        from cin7_core_server.resources.products import cin7_products
 
         result = await cin7_products(fields=["PriceTier1", "Category"])
 
@@ -158,17 +136,6 @@ class TestCin7Products:
             # Non-requested fields still excluded
             assert "ID" not in product
             assert "Brand" not in product
-
-    @pytest.mark.asyncio
-    async def test_aclose_always_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.list_products = AsyncMock(return_value=copy.deepcopy(PRODUCT_LIST_RESPONSE))
-
-        from mcp_cin7_core.mcp_server import cin7_products
-
-        await cin7_products()
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +151,7 @@ class TestCin7GetProduct:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_product
+        from cin7_core_server.resources.products import cin7_get_product
 
         result = await cin7_get_product(product_id="prod-abc-123")
 
@@ -198,7 +165,7 @@ class TestCin7GetProduct:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_product
+        from cin7_core_server.resources.products import cin7_get_product
 
         result = await cin7_get_product(sku="WIDGET-001")
 
@@ -206,17 +173,6 @@ class TestCin7GetProduct:
             product_id=None, sku="WIDGET-001"
         )
         assert result == PRODUCT_SINGLE
-
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
-
-        from mcp_cin7_core.mcp_server import cin7_get_product
-
-        await cin7_get_product(product_id="prod-abc-123")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -233,14 +189,14 @@ class TestCin7CreateProduct:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.save_product = AsyncMock(return_value=PRODUCT_SAVE_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_create_product
+        from cin7_core_server.resources.products import cin7_create_product
 
         payload = {"SKU": "NEWPROD-001", "Name": "New Product", "Category": "Test"}
         result = await cin7_create_product(payload)
 
         mock_instance.save_product.assert_called_once_with(payload)
         assert result["ID"] == "prod-new-789"
-        mock_instance.aclose.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_with_suppliers(self, mock_cin7_class):
@@ -251,7 +207,7 @@ class TestCin7CreateProduct:
             return_value=PRODUCT_SUPPLIERS_UPDATE_RESPONSE
         )
 
-        from mcp_cin7_core.mcp_server import cin7_create_product
+        from cin7_core_server.resources.products import cin7_create_product
 
         suppliers = [{"SupplierID": "sup-222", "SupplierName": "New Supplier", "Cost": 10.00}]
         payload = {
@@ -282,7 +238,7 @@ class TestCin7CreateProduct:
             side_effect=Exception("Supplier API error")
         )
 
-        from mcp_cin7_core.mcp_server import cin7_create_product
+        from cin7_core_server.resources.products import cin7_create_product
 
         suppliers = [{"SupplierID": "sup-bad", "SupplierName": "Bad Supplier"}]
         payload = {
@@ -298,16 +254,7 @@ class TestCin7CreateProduct:
         assert result["_suppliersRegistered"] is False
         assert "Supplier API error" in result["_supplierError"]
 
-    @pytest.mark.asyncio
-    async def test_aclose_always_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.save_product = AsyncMock(return_value=PRODUCT_SAVE_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_create_product
-
-        await cin7_create_product({"SKU": "X", "Name": "Y"})
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -324,14 +271,14 @@ class TestCin7UpdateProduct:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.update_product = AsyncMock(return_value=PRODUCT_UPDATE_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_update_product
+        from cin7_core_server.resources.products import cin7_update_product
 
         payload = {"ID": "prod-abc-123", "Name": "Updated Widget"}
         result = await cin7_update_product(payload)
 
         mock_instance.update_product.assert_called_once_with(payload)
         assert result["Name"] == "Updated Widget"
-        mock_instance.aclose.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_with_suppliers_extracts_product_id_from_payload(self, mock_cin7_class):
@@ -343,7 +290,7 @@ class TestCin7UpdateProduct:
             return_value=PRODUCT_SUPPLIERS_UPDATE_RESPONSE
         )
 
-        from mcp_cin7_core.mcp_server import cin7_update_product
+        from cin7_core_server.resources.products import cin7_update_product
 
         suppliers = [{"SupplierID": "sup-222", "SupplierName": "New Supplier", "Cost": 10.00}]
         payload = {
@@ -373,7 +320,7 @@ class TestCin7UpdateProduct:
             side_effect=Exception("Supplier update failed")
         )
 
-        from mcp_cin7_core.mcp_server import cin7_update_product
+        from cin7_core_server.resources.products import cin7_update_product
 
         suppliers = [{"SupplierID": "sup-bad"}]
         payload = {
@@ -387,16 +334,7 @@ class TestCin7UpdateProduct:
         assert result["_suppliersUpdated"] is False
         assert "Supplier update failed" in result["_supplierError"]
 
-    @pytest.mark.asyncio
-    async def test_aclose_always_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.update_product = AsyncMock(return_value=PRODUCT_UPDATE_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_update_product
-
-        await cin7_update_product({"ID": "prod-abc-123"})
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -412,25 +350,25 @@ class TestCin7Suppliers:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_suppliers = AsyncMock(return_value=SUPPLIER_LIST_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_suppliers
+        from cin7_core_server.resources.suppliers import cin7_suppliers
 
         result = await cin7_suppliers(page=1, limit=50)
 
         mock_instance.list_suppliers.assert_called_once_with(page=1, limit=50, name=None)
         assert result == SUPPLIER_LIST_RESPONSE
-        mock_instance.aclose.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_with_name_filter(self, mock_cin7_class):
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_suppliers = AsyncMock(return_value=SUPPLIER_LIST_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_suppliers
+        from cin7_core_server.resources.suppliers import cin7_suppliers
 
         result = await cin7_suppliers(name="Acme")
 
         mock_instance.list_suppliers.assert_called_once_with(page=1, limit=100, name="Acme")
-        mock_instance.aclose.assert_called_once()
+
 
 
 # ---------------------------------------------------------------------------
@@ -446,7 +384,7 @@ class TestCin7GetSupplier:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_supplier
+        from cin7_core_server.resources.suppliers import cin7_get_supplier
 
         result = await cin7_get_supplier(supplier_id="sup-abc-123")
 
@@ -460,7 +398,7 @@ class TestCin7GetSupplier:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_supplier
+        from cin7_core_server.resources.suppliers import cin7_get_supplier
 
         result = await cin7_get_supplier(name="Acme Supplies")
 
@@ -469,16 +407,7 @@ class TestCin7GetSupplier:
         )
         assert result == SUPPLIER_SINGLE
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_supplier
-
-        await cin7_get_supplier(supplier_id="sup-abc-123")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -494,7 +423,7 @@ class TestCin7CreateSupplier:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.save_supplier = AsyncMock(return_value=SUPPLIER_SAVE_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_create_supplier
+        from cin7_core_server.resources.suppliers import cin7_create_supplier
 
         payload = {"Name": "New Supplier", "ContactPerson": "Bob Wilson"}
         result = await cin7_create_supplier(payload)
@@ -503,16 +432,7 @@ class TestCin7CreateSupplier:
         assert result["ID"] == "sup-new-789"
         assert result["Name"] == "New Supplier"
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.save_supplier = AsyncMock(return_value=SUPPLIER_SAVE_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_create_supplier
-
-        await cin7_create_supplier({"Name": "Test"})
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -528,7 +448,7 @@ class TestCin7UpdateSupplier:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.update_supplier = AsyncMock(return_value=SUPPLIER_UPDATE_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_update_supplier
+        from cin7_core_server.resources.suppliers import cin7_update_supplier
 
         payload = {"ID": "sup-abc-123", "Name": "Acme Supplies Updated"}
         result = await cin7_update_supplier(payload)
@@ -536,16 +456,7 @@ class TestCin7UpdateSupplier:
         mock_instance.update_supplier.assert_called_once_with(payload)
         assert result["Name"] == "Acme Supplies Updated"
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.update_supplier = AsyncMock(return_value=SUPPLIER_UPDATE_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_update_supplier
-
-        await cin7_update_supplier({"ID": "sup-abc-123"})
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -561,12 +472,12 @@ class TestCin7Sales:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_sales = AsyncMock(return_value=copy.deepcopy(SALE_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_sales
+        from cin7_core_server.resources.sales import cin7_sales
 
         result = await cin7_sales(page=1, limit=50, search="test")
 
         mock_instance.list_sales.assert_called_once_with(page=1, limit=50, search="test")
-        mock_instance.aclose.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_default_projection_keeps_base_fields(self, mock_cin7_class):
@@ -574,7 +485,7 @@ class TestCin7Sales:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_sales = AsyncMock(return_value=copy.deepcopy(SALE_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_sales
+        from cin7_core_server.resources.sales import cin7_sales
 
         result = await cin7_sales()
 
@@ -595,7 +506,7 @@ class TestCin7Sales:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_sales = AsyncMock(return_value=copy.deepcopy(SALE_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_sales
+        from cin7_core_server.resources.sales import cin7_sales
 
         result = await cin7_sales(fields=["Status", "Total"])
 
@@ -610,16 +521,7 @@ class TestCin7Sales:
             # Still excluded
             assert "OrderDate" not in sale
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.list_sales = AsyncMock(return_value=copy.deepcopy(SALE_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_sales
-
-        await cin7_sales()
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -635,7 +537,7 @@ class TestCin7GetSale:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_sale = AsyncMock(return_value=SALE_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_sale
+        from cin7_core_server.resources.sales import cin7_get_sale
 
         result = await cin7_get_sale(sale_id="sale-abc-123")
 
@@ -646,14 +548,14 @@ class TestCin7GetSale:
             include_transactions=False,
         )
         assert result == SALE_SINGLE
-        mock_instance.aclose.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_passes_optional_params(self, mock_cin7_class):
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_sale = AsyncMock(return_value=SALE_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_sale
+        from cin7_core_server.resources.sales import cin7_get_sale
 
         result = await cin7_get_sale(
             sale_id="sale-abc-123",
@@ -668,7 +570,7 @@ class TestCin7GetSale:
             hide_inventory_movements=True,
             include_transactions=True,
         )
-        mock_instance.aclose.assert_called_once()
+
 
 
 # ---------------------------------------------------------------------------
@@ -684,14 +586,14 @@ class TestCin7PurchaseOrders:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_purchase_orders = AsyncMock(return_value=copy.deepcopy(PO_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_purchase_orders
+        from cin7_core_server.resources.purchase_orders import cin7_purchase_orders
 
         result = await cin7_purchase_orders(page=1, limit=50, search="acme")
 
         mock_instance.list_purchase_orders.assert_called_once_with(
             page=1, limit=50, search="acme"
         )
-        mock_instance.aclose.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_default_projection_keeps_base_fields(self, mock_cin7_class):
@@ -699,7 +601,7 @@ class TestCin7PurchaseOrders:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_purchase_orders = AsyncMock(return_value=copy.deepcopy(PO_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_purchase_orders
+        from cin7_core_server.resources.purchase_orders import cin7_purchase_orders
 
         result = await cin7_purchase_orders()
 
@@ -720,7 +622,7 @@ class TestCin7PurchaseOrders:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_purchase_orders = AsyncMock(return_value=copy.deepcopy(PO_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_purchase_orders
+        from cin7_core_server.resources.purchase_orders import cin7_purchase_orders
 
         result = await cin7_purchase_orders(fields=["Total", "RequiredBy"])
 
@@ -734,16 +636,7 @@ class TestCin7PurchaseOrders:
             assert "Total" in po
             assert "RequiredBy" in po
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.list_purchase_orders = AsyncMock(return_value=copy.deepcopy(PO_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_purchase_orders
-
-        await cin7_purchase_orders()
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -759,7 +652,7 @@ class TestCin7GetPurchaseOrder:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_purchase_order = AsyncMock(return_value=PO_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_purchase_order
+        from cin7_core_server.resources.purchase_orders import cin7_get_purchase_order
 
         result = await cin7_get_purchase_order(purchase_order_id="po-task-001")
 
@@ -768,16 +661,7 @@ class TestCin7GetPurchaseOrder:
         )
         assert result == PO_SINGLE
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_purchase_order = AsyncMock(return_value=PO_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_purchase_order
-
-        await cin7_get_purchase_order(purchase_order_id="po-task-001")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -793,7 +677,7 @@ class TestCin7CreatePurchaseOrder:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.save_purchase_order = AsyncMock(return_value=PO_ORDER_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_create_purchase_order
+        from cin7_core_server.resources.purchase_orders import cin7_create_purchase_order
 
         payload = {
             "Supplier": "Acme Supplies",
@@ -816,18 +700,9 @@ class TestCin7CreatePurchaseOrder:
 
         mock_instance.save_purchase_order.assert_called_once_with(payload)
         assert result["TaskID"] == "po-new-789"
-        mock_instance.aclose.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.save_purchase_order = AsyncMock(return_value=PO_ORDER_RESPONSE)
 
-        from mcp_cin7_core.mcp_server import cin7_create_purchase_order
 
-        await cin7_create_purchase_order({"Supplier": "X", "Lines": []})
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -845,14 +720,14 @@ class TestCin7StockTransfers:
             return_value=copy.deepcopy(STOCK_TRANSFER_LIST_RESPONSE)
         )
 
-        from mcp_cin7_core.mcp_server import cin7_stock_transfers
+        from cin7_core_server.resources.stock import cin7_stock_transfers
 
         result = await cin7_stock_transfers(page=1, limit=50, search="restock")
 
         mock_instance.list_stock_transfers.assert_called_once_with(
             page=1, limit=50, search="restock"
         )
-        mock_instance.aclose.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_default_projection_keeps_base_fields(self, mock_cin7_class):
@@ -862,7 +737,7 @@ class TestCin7StockTransfers:
             return_value=copy.deepcopy(STOCK_TRANSFER_LIST_RESPONSE)
         )
 
-        from mcp_cin7_core.mcp_server import cin7_stock_transfers
+        from cin7_core_server.resources.stock import cin7_stock_transfers
 
         result = await cin7_stock_transfers()
 
@@ -884,7 +759,7 @@ class TestCin7StockTransfers:
             return_value=copy.deepcopy(STOCK_TRANSFER_LIST_RESPONSE)
         )
 
-        from mcp_cin7_core.mcp_server import cin7_stock_transfers
+        from cin7_core_server.resources.stock import cin7_stock_transfers
 
         result = await cin7_stock_transfers(fields=["Note"])
 
@@ -897,18 +772,8 @@ class TestCin7StockTransfers:
             assert "TransferDate" in transfer
             assert "Note" in transfer
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.list_stock_transfers = AsyncMock(
-            return_value=copy.deepcopy(STOCK_TRANSFER_LIST_RESPONSE)
-        )
 
-        from mcp_cin7_core.mcp_server import cin7_stock_transfers
 
-        await cin7_stock_transfers()
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -924,7 +789,7 @@ class TestCin7GetStockTransfer:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_stock_transfer = AsyncMock(return_value=STOCK_TRANSFER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_stock_transfer
+        from cin7_core_server.resources.stock import cin7_get_stock_transfer
 
         result = await cin7_get_stock_transfer(stock_transfer_id="st-task-001")
 
@@ -933,16 +798,8 @@ class TestCin7GetStockTransfer:
         )
         assert result == STOCK_TRANSFER_SINGLE
 
-    @pytest.mark.asyncio
-    async def test_aclose_called(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_stock_transfer = AsyncMock(return_value=STOCK_TRANSFER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import cin7_get_stock_transfer
 
-        await cin7_get_stock_transfer(stock_transfer_id="st-task-001")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -974,13 +831,12 @@ class TestStockLevelsTools:
             "Total": 1,
         }
 
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.stock.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.list_product_availability = AsyncMock(return_value=mock_result)
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import cin7_stock_levels
+            from cin7_core_server.resources.stock import cin7_stock_levels
 
             result = await cin7_stock_levels(page=1, limit=100)
 
@@ -1012,13 +868,12 @@ class TestStockLevelsTools:
             "Total": 1,
         }
 
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.stock.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.list_product_availability = AsyncMock(return_value=mock_result)
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import cin7_stock_levels
+            from cin7_core_server.resources.stock import cin7_stock_levels
 
             result = await cin7_stock_levels(fields=["Allocated", "Bin"])
 
@@ -1034,13 +889,12 @@ class TestStockLevelsTools:
             {"SKU": "TEST-001", "Location": "Store", "OnHand": 10.0, "Available": 10.0},
         ]
 
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.stock.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.get_product_availability = AsyncMock(return_value=mock_result)
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import cin7_get_stock
+            from cin7_core_server.resources.stock import cin7_get_stock
 
             result = await cin7_get_stock(sku="TEST-001")
 
@@ -1061,16 +915,15 @@ class TestStockSnapshotTools:
     @pytest.mark.asyncio
     async def test_snapshot_start_returns_id(self):
         """Should return a snapshot ID when started."""
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.snapshots.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.list_product_availability = AsyncMock(return_value={
                 "ProductAvailabilityList": [],
                 "Total": 0,
             })
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import cin7_stock_snapshot_start
+            from cin7_core_server.resources.snapshots import cin7_stock_snapshot_start
 
             result = await cin7_stock_snapshot_start()
 
@@ -1081,16 +934,15 @@ class TestStockSnapshotTools:
     @pytest.mark.asyncio
     async def test_snapshot_status_returns_progress(self):
         """Should return snapshot status."""
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.snapshots.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.list_product_availability = AsyncMock(return_value={
                 "ProductAvailabilityList": [{"SKU": "A", "Location": "M", "OnHand": 1, "Available": 1}],
                 "Total": 1,
             })
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import (
+            from cin7_core_server.resources.snapshots import (
                 cin7_stock_snapshot_start,
                 cin7_stock_snapshot_status,
             )
@@ -1111,7 +963,7 @@ class TestStockSnapshotTools:
     @pytest.mark.asyncio
     async def test_snapshot_chunk_returns_items(self):
         """Should return items from snapshot."""
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.snapshots.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.list_product_availability = AsyncMock(return_value={
                 "ProductAvailabilityList": [
@@ -1120,10 +972,9 @@ class TestStockSnapshotTools:
                 ],
                 "Total": 2,
             })
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import (
+            from cin7_core_server.resources.snapshots import (
                 cin7_stock_snapshot_start,
                 cin7_stock_snapshot_chunk,
             )
@@ -1144,16 +995,15 @@ class TestStockSnapshotTools:
     @pytest.mark.asyncio
     async def test_snapshot_close_cleans_up(self):
         """Should clean up snapshot on close."""
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.snapshots.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.list_product_availability = AsyncMock(return_value={
                 "ProductAvailabilityList": [],
                 "Total": 0,
             })
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import (
+            from cin7_core_server.resources.snapshots import (
                 cin7_stock_snapshot_start,
                 cin7_stock_snapshot_close,
                 cin7_stock_snapshot_status,
@@ -1188,13 +1038,12 @@ class TestSaleTools:
             "Quote": {"Status": "DRAFT", "Lines": []}
         }
 
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.sales.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.save_sale = AsyncMock(return_value=mock_result)
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import cin7_create_sale
+            from cin7_core_server.resources.sales import cin7_create_sale
 
             payload = {
                 "Customer": "Test Customer",
@@ -1217,7 +1066,6 @@ class TestSaleTools:
             assert result["SaleID"] == "sale-123"
             assert result["Customer"] == "Test Customer"
             mock_client.save_sale.assert_called_once_with(payload)
-            mock_client.aclose.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cin7_update_sale_calls_client(self):
@@ -1228,13 +1076,12 @@ class TestSaleTools:
             "Status": "DRAFT"
         }
 
-        with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
+        with patch("cin7_core_server.resources.sales.Cin7Client") as mock_class:
             mock_client = MagicMock()
             mock_client.update_sale = AsyncMock(return_value=mock_result)
-            mock_client.aclose = AsyncMock()
             mock_class.from_env.return_value = mock_client
 
-            from mcp_cin7_core.mcp_server import cin7_update_sale
+            from cin7_core_server.resources.sales import cin7_update_sale
 
             payload = {
                 "SaleID": "sale-123",
@@ -1245,91 +1092,6 @@ class TestSaleTools:
             assert result["SaleID"] == "sale-123"
             assert result["Customer"] == "Updated Customer"
             mock_client.update_sale.assert_called_once_with(payload)
-            mock_client.aclose.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# TestAcloseOnException
-# ---------------------------------------------------------------------------
-
-
-class TestAcloseOnException:
-    """Tests that aclose() is called even when the client method raises.
-
-    This is critical for preventing connection leaks.
-    """
-
-    @pytest.mark.asyncio
-    async def test_cin7_products_aclose_on_error(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.list_products = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import cin7_products
-
-        with pytest.raises(Exception, match="API error"):
-            await cin7_products()
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cin7_get_product_aclose_on_error(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_product = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import cin7_get_product
-
-        with pytest.raises(Exception, match="API error"):
-            await cin7_get_product(product_id="x")
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cin7_create_product_aclose_on_error(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.save_product = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import cin7_create_product
-
-        with pytest.raises(Exception, match="API error"):
-            await cin7_create_product({"SKU": "X"})
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cin7_suppliers_aclose_on_error(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.list_suppliers = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import cin7_suppliers
-
-        with pytest.raises(Exception, match="API error"):
-            await cin7_suppliers()
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cin7_sales_aclose_on_error(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.list_sales = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import cin7_sales
-
-        with pytest.raises(Exception, match="API error"):
-            await cin7_sales()
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cin7_get_stock_aclose_on_error(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_product_availability = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import cin7_get_stock
-
-        with pytest.raises(Exception, match="API error"):
-            await cin7_get_stock(sku="X")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -1345,7 +1107,7 @@ class TestCin7GetStockEdgeCases:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_product_availability = AsyncMock(return_value=[])
 
-        from mcp_cin7_core.mcp_server import cin7_get_stock
+        from cin7_core_server.resources.stock import cin7_get_stock
 
         result = await cin7_get_stock(sku="MISSING")
 
@@ -1362,7 +1124,7 @@ class TestCin7GetStockEdgeCases:
             {"SKU": "X", "OnHand": None, "Available": None, "ProductID": "p1"}
         ])
 
-        from mcp_cin7_core.mcp_server import cin7_get_stock
+        from cin7_core_server.resources.stock import cin7_get_stock
 
         result = await cin7_get_stock(sku="X")
 
@@ -1383,7 +1145,7 @@ class TestProductsProjectionEdgeCases:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_products = AsyncMock(return_value=copy.deepcopy(PRODUCT_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_products
+        from cin7_core_server.resources.products import cin7_products
 
         result = await cin7_products(fields=[])
 
@@ -1402,7 +1164,7 @@ class TestProductsProjectionEdgeCases:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.list_products = AsyncMock(return_value=copy.deepcopy(PRODUCT_LIST_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_products
+        from cin7_core_server.resources.products import cin7_products
 
         result = await cin7_products(fields=["NonExistentField"])
 
@@ -1426,7 +1188,7 @@ class TestCreateProductSupplierEdgeCases:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.save_product = AsyncMock(return_value=copy.deepcopy(PRODUCT_SAVE_RESPONSE))
 
-        from mcp_cin7_core.mcp_server import cin7_create_product
+        from cin7_core_server.resources.products import cin7_create_product
 
         payload = {
             "SKU": "NEWPROD-001",
@@ -1445,7 +1207,7 @@ class TestCreateProductSupplierEdgeCases:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.save_product = AsyncMock(return_value={"Name": "Test"})
 
-        from mcp_cin7_core.mcp_server import cin7_create_product
+        from cin7_core_server.resources.products import cin7_create_product
 
         payload = {
             "SKU": "NEWPROD-001",

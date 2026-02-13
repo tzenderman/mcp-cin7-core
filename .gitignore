@@ -1,6 +1,7 @@
 *.pyc
 .venv/
 .env
-/src/mcp_cin7_core.egg-info
+*.egg-info
 .worktrees/
 .DS_Store
+render.yaml

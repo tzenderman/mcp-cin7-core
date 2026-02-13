@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import mcp_cin7_core.mcp_server as server_mod
-from mcp_cin7_core.mcp_server import (
+import cin7_core_server.resources.snapshots as server_mod
+from cin7_core_server.resources.snapshots import (
     cin7_products_snapshot_start,
     cin7_products_snapshot_status,
     cin7_products_snapshot_chunk,
@@ -44,10 +44,9 @@ def _mock_cin7_client(**method_mocks):
     e.g. ``_mock_cin7_client(list_products=AsyncMock(return_value={...}))``.
     """
     mock_client = MagicMock()
-    mock_client.aclose = AsyncMock()
     for name, mock in method_mocks.items():
         setattr(mock_client, name, mock)
-    patcher = patch("mcp_cin7_core.mcp_server.Cin7Client")
+    patcher = patch("cin7_core_server.resources.snapshots.Cin7Client")
     mock_class = patcher.start()
     mock_class.from_env.return_value = mock_client
     return patcher, mock_client
@@ -488,7 +487,7 @@ class TestSnapshotEdgeCases:
 # ---------------------------------------------------------------------------
 
 import time
-from mcp_cin7_core.mcp_server import SNAPSHOT_TTL_SECONDS
+from cin7_core_server.resources.snapshots import SNAPSHOT_TTL_SECONDS
 
 
 class TestProductSnapshotTTLExpiry:
@@ -583,57 +582,6 @@ class TestStockSnapshotTTLExpiry:
             # Chunk call triggers _cleanup_expired_stock_snapshots()
             result = await cin7_stock_snapshot_chunk(sid, offset=0)
             assert result == {"error": "snapshot not found"}
-        finally:
-            patcher.stop()
-
-
-# ---------------------------------------------------------------------------
-# Build aclose-on-error Tests
-# ---------------------------------------------------------------------------
-
-
-class TestSnapshotBuildAcloseOnError:
-    """Tests that aclose is called in the finally block when build raises."""
-
-    async def test_product_snapshot_build_calls_aclose_on_error(self):
-        """When list_products raises, the client's aclose should still be called."""
-        patcher, mock_instance = _mock_cin7_client(
-            list_products=AsyncMock(side_effect=RuntimeError("API crash")),
-        )
-        try:
-            start = await cin7_products_snapshot_start()
-            sid = start["snapshotId"]
-            await asyncio.sleep(0.1)
-
-            # aclose should have been called in _build_snapshot's finally block
-            mock_instance.aclose.assert_called()
-
-            # The snapshot should have captured the error
-            snap = server_mod._snapshots.get(sid)
-            assert snap is not None
-            assert snap.error is not None
-            assert "API crash" in snap.error
-        finally:
-            patcher.stop()
-
-    async def test_stock_snapshot_build_calls_aclose_on_error(self):
-        """When list_product_availability raises, the client's aclose should still be called."""
-        patcher, mock_instance = _mock_cin7_client(
-            list_product_availability=AsyncMock(side_effect=RuntimeError("API crash")),
-        )
-        try:
-            start = await cin7_stock_snapshot_start()
-            sid = start["snapshotId"]
-            await asyncio.sleep(0.1)
-
-            # aclose should have been called in _build_stock_snapshot's finally block
-            mock_instance.aclose.assert_called()
-
-            # The snapshot should have captured the error
-            snap = server_mod._stock_snapshots.get(sid)
-            assert snap is not None
-            assert snap.error is not None
-            assert "API crash" in snap.error
         finally:
             patcher.stop()
 

@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mcp_cin7_core.cin7_client import Cin7Client
+from cin7_core_server.cin7_client import Cin7Client
 
 
 @pytest.fixture
@@ -30,29 +30,47 @@ def mock_response():
 
 @pytest.fixture
 def mock_client():
-    """Create a Cin7Client with mocked httpx client."""
+    """Create a Cin7Client with mocked _request method."""
     with patch.dict("os.environ", {
         "CIN7_ACCOUNT_ID": "test_account",
         "CIN7_API_KEY": "test_key",
     }):
         client = Cin7Client.from_env()
-        client.client = MagicMock()
+        client._request = AsyncMock()
         return client
+
+
+# All resource modules that import Cin7Client
+_RESOURCE_MODULES = [
+    "cin7_core_server.resources.auth",
+    "cin7_core_server.resources.products",
+    "cin7_core_server.resources.suppliers",
+    "cin7_core_server.resources.sales",
+    "cin7_core_server.resources.purchase_orders",
+    "cin7_core_server.resources.stock",
+    "cin7_core_server.resources.snapshots",
+    "cin7_core_server.resources.templates",
+]
 
 
 @pytest.fixture
 def mock_cin7_class():
-    """Patch Cin7Client in mcp_server module, yield (mock_class, mock_instance).
+    """Patch Cin7Client in all resource modules, yield (mock_class, mock_instance).
 
     Usage:
         def test_something(mock_cin7_class):
             mock_class, mock_instance = mock_cin7_class
             mock_instance.some_method = AsyncMock(return_value={...})
             # call the tool function...
-            mock_instance.aclose.assert_called_once()
     """
-    with patch("mcp_cin7_core.mcp_server.Cin7Client") as mock_class:
-        mock_instance = MagicMock()
-        mock_instance.aclose = AsyncMock()
-        mock_class.from_env.return_value = mock_instance
-        yield mock_class, mock_instance
+    mock_instance = MagicMock()
+    mock_instance.aclose = AsyncMock()
+    mock_class = MagicMock()
+    mock_class.from_env.return_value = mock_instance
+
+    patchers = [patch(f"{mod}.Cin7Client", mock_class) for mod in _RESOURCE_MODULES]
+    for p in patchers:
+        p.start()
+    yield mock_class, mock_instance
+    for p in patchers:
+        p.stop()

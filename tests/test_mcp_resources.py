@@ -21,7 +21,7 @@ class TestProductTemplate:
 
     @pytest.mark.asyncio
     async def test_returns_valid_json_with_required_fields(self):
-        from mcp_cin7_core.mcp_server import resource_product_template
+        from cin7_core_server.resources.templates import resource_product_template
 
         result = await resource_product_template()
         template = json.loads(result)
@@ -32,7 +32,7 @@ class TestProductTemplate:
 
     @pytest.mark.asyncio
     async def test_has_correct_defaults(self):
-        from mcp_cin7_core.mcp_server import resource_product_template
+        from cin7_core_server.resources.templates import resource_product_template
 
         result = await resource_product_template()
         template = json.loads(result)
@@ -44,7 +44,7 @@ class TestProductTemplate:
 
     @pytest.mark.asyncio
     async def test_includes_suppliers_array(self):
-        from mcp_cin7_core.mcp_server import resource_product_template
+        from cin7_core_server.resources.templates import resource_product_template
 
         result = await resource_product_template()
         template = json.loads(result)
@@ -64,7 +64,7 @@ class TestProductById:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_product_by_id
+        from cin7_core_server.resources.templates import resource_product_by_id
 
         result = await resource_product_by_id("prod-abc-123")
 
@@ -76,7 +76,7 @@ class TestProductById:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_product_by_id
+        from cin7_core_server.resources.templates import resource_product_by_id
 
         result = await resource_product_by_id("prod-abc-123")
         data = json.loads(result)
@@ -85,16 +85,6 @@ class TestProductById:
         assert data["Name"] == "Blue Widget"
         assert data["ID"] == "prod-abc-123"
 
-    @pytest.mark.asyncio
-    async def test_closes_client(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
-
-        from mcp_cin7_core.mcp_server import resource_product_by_id
-
-        await resource_product_by_id("prod-abc-123")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ----------------------------- Product By SKU -----------------------------
@@ -108,7 +98,7 @@ class TestProductBySku:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_product_by_sku
+        from cin7_core_server.resources.templates import resource_product_by_sku
 
         result = await resource_product_by_sku("WIDGET-001")
 
@@ -120,7 +110,7 @@ class TestProductBySku:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_product_by_sku
+        from cin7_core_server.resources.templates import resource_product_by_sku
 
         result = await resource_product_by_sku("WIDGET-001")
         data = json.loads(result)
@@ -129,16 +119,6 @@ class TestProductBySku:
         assert data["Name"] == "Blue Widget"
         assert data["Category"] == "Widgets"
 
-    @pytest.mark.asyncio
-    async def test_closes_client(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_product = AsyncMock(return_value=PRODUCT_SINGLE)
-
-        from mcp_cin7_core.mcp_server import resource_product_by_sku
-
-        await resource_product_by_sku("WIDGET-001")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ----------------------------- Supplier Template -----------------------------
@@ -149,7 +129,7 @@ class TestSupplierTemplate:
 
     @pytest.mark.asyncio
     async def test_returns_valid_json_with_name_field(self):
-        from mcp_cin7_core.mcp_server import resource_supplier_template
+        from cin7_core_server.resources.templates import resource_supplier_template
 
         result = await resource_supplier_template()
         template = json.loads(result)
@@ -158,7 +138,7 @@ class TestSupplierTemplate:
 
     @pytest.mark.asyncio
     async def test_has_address_structure(self):
-        from mcp_cin7_core.mcp_server import resource_supplier_template
+        from cin7_core_server.resources.templates import resource_supplier_template
 
         result = await resource_supplier_template()
         template = json.loads(result)
@@ -180,7 +160,7 @@ class TestSupplierById:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_supplier_by_id
+        from cin7_core_server.resources.templates import resource_supplier_by_id
 
         result = await resource_supplier_by_id("sup-abc-123")
 
@@ -192,7 +172,7 @@ class TestSupplierById:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_supplier_by_id
+        from cin7_core_server.resources.templates import resource_supplier_by_id
 
         result = await resource_supplier_by_id("sup-abc-123")
         data = json.loads(result)
@@ -201,16 +181,6 @@ class TestSupplierById:
         assert data["ID"] == "sup-abc-123"
         assert data["ContactPerson"] == "John Doe"
 
-    @pytest.mark.asyncio
-    async def test_closes_client(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
-
-        from mcp_cin7_core.mcp_server import resource_supplier_by_id
-
-        await resource_supplier_by_id("sup-abc-123")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ----------------------------- Supplier By Name -----------------------------
@@ -224,7 +194,7 @@ class TestSupplierByName:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_supplier_by_name
+        from cin7_core_server.resources.templates import resource_supplier_by_name
 
         result = await resource_supplier_by_name("Acme Supplies")
 
@@ -236,7 +206,7 @@ class TestSupplierByName:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_supplier_by_name
+        from cin7_core_server.resources.templates import resource_supplier_by_name
 
         result = await resource_supplier_by_name("Acme Supplies")
         data = json.loads(result)
@@ -245,16 +215,6 @@ class TestSupplierByName:
         assert data["Email"] == "john@acme-supplies.com"
         assert data["Currency"] == "USD"
 
-    @pytest.mark.asyncio
-    async def test_closes_client(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_supplier = AsyncMock(return_value=SUPPLIER_SINGLE)
-
-        from mcp_cin7_core.mcp_server import resource_supplier_by_name
-
-        await resource_supplier_by_name("Acme Supplies")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ----------------------------- PO Template -----------------------------
@@ -265,7 +225,7 @@ class TestPOTemplate:
 
     @pytest.mark.asyncio
     async def test_returns_valid_json_with_required_fields(self):
-        from mcp_cin7_core.mcp_server import resource_purchase_order_template
+        from cin7_core_server.resources.templates import resource_purchase_order_template
 
         result = await resource_purchase_order_template()
         template = json.loads(result)
@@ -275,7 +235,7 @@ class TestPOTemplate:
 
     @pytest.mark.asyncio
     async def test_lines_array_has_template_line_with_required_fields(self):
-        from mcp_cin7_core.mcp_server import resource_purchase_order_template
+        from cin7_core_server.resources.templates import resource_purchase_order_template
 
         result = await resource_purchase_order_template()
         template = json.loads(result)
@@ -289,7 +249,7 @@ class TestPOTemplate:
 
     @pytest.mark.asyncio
     async def test_status_is_draft(self):
-        from mcp_cin7_core.mcp_server import resource_purchase_order_template
+        from cin7_core_server.resources.templates import resource_purchase_order_template
 
         result = await resource_purchase_order_template()
         template = json.loads(result)
@@ -308,7 +268,7 @@ class TestPOById:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_purchase_order = AsyncMock(return_value=PO_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_purchase_order_by_id
+        from cin7_core_server.resources.templates import resource_purchase_order_by_id
 
         result = await resource_purchase_order_by_id("po-abc-123")
 
@@ -322,7 +282,7 @@ class TestPOById:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_purchase_order = AsyncMock(return_value=PO_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_purchase_order_by_id
+        from cin7_core_server.resources.templates import resource_purchase_order_by_id
 
         result = await resource_purchase_order_by_id("po-abc-123")
         data = json.loads(result)
@@ -332,16 +292,6 @@ class TestPOById:
         assert data["Status"] == "DRAFT"
         assert data["Order"]["Lines"][0]["SKU"] == "WIDGET-001"
 
-    @pytest.mark.asyncio
-    async def test_closes_client(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_purchase_order = AsyncMock(return_value=PO_SINGLE)
-
-        from mcp_cin7_core.mcp_server import resource_purchase_order_by_id
-
-        await resource_purchase_order_by_id("po-abc-123")
-
-        mock_instance.aclose.assert_called_once()
 
 
 # ----------------------------- Sale Template -----------------------------
@@ -352,7 +302,7 @@ class TestSaleTemplate:
 
     @pytest.mark.asyncio
     async def test_returns_valid_json_with_required_fields(self):
-        from mcp_cin7_core.mcp_server import resource_sale_template
+        from cin7_core_server.resources.templates import resource_sale_template
 
         result = await resource_sale_template()
         template = json.loads(result)
@@ -362,7 +312,7 @@ class TestSaleTemplate:
 
     @pytest.mark.asyncio
     async def test_lines_array_has_template_line_with_required_fields(self):
-        from mcp_cin7_core.mcp_server import resource_sale_template
+        from cin7_core_server.resources.templates import resource_sale_template
 
         result = await resource_sale_template()
         template = json.loads(result)
@@ -376,7 +326,7 @@ class TestSaleTemplate:
 
     @pytest.mark.asyncio
     async def test_status_is_draft(self):
-        from mcp_cin7_core.mcp_server import resource_sale_template
+        from cin7_core_server.resources.templates import resource_sale_template
 
         result = await resource_sale_template()
         template = json.loads(result)
@@ -395,7 +345,7 @@ class TestSaleById:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_sale = AsyncMock(return_value=SALE_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_sale_by_id
+        from cin7_core_server.resources.templates import resource_sale_by_id
 
         result = await resource_sale_by_id("sale-abc-123")
 
@@ -407,7 +357,7 @@ class TestSaleById:
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_sale = AsyncMock(return_value=SALE_SINGLE)
 
-        from mcp_cin7_core.mcp_server import resource_sale_by_id
+        from cin7_core_server.resources.templates import resource_sale_by_id
 
         result = await resource_sale_by_id("sale-abc-123")
         data = json.loads(result)
@@ -417,92 +367,3 @@ class TestSaleById:
         assert data["Status"] == "DRAFT"
         assert data["Quote"]["Lines"][0]["SKU"] == "WIDGET-001"
 
-    @pytest.mark.asyncio
-    async def test_closes_client(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_sale = AsyncMock(return_value=SALE_SINGLE)
-
-        from mcp_cin7_core.mcp_server import resource_sale_by_id
-
-        await resource_sale_by_id("sale-abc-123")
-
-        mock_instance.aclose.assert_called_once()
-
-
-# ----------------------------- Resource Error Handling -----------------------------
-
-
-class TestResourceErrorHandling:
-    """Tests that resource handlers propagate exceptions and still call aclose()."""
-
-    @pytest.mark.asyncio
-    async def test_product_by_id_error_propagates_and_closes(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_product = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import resource_product_by_id
-
-        with pytest.raises(Exception, match="API error"):
-            await resource_product_by_id("prod-1")
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_product_by_sku_error_propagates_and_closes(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_product = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import resource_product_by_sku
-
-        with pytest.raises(Exception, match="API error"):
-            await resource_product_by_sku("SKU-1")
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_supplier_by_id_error_propagates_and_closes(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_supplier = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import resource_supplier_by_id
-
-        with pytest.raises(Exception, match="API error"):
-            await resource_supplier_by_id("sup-1")
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_supplier_by_name_error_propagates_and_closes(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_supplier = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import resource_supplier_by_name
-
-        with pytest.raises(Exception, match="API error"):
-            await resource_supplier_by_name("Test")
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_purchase_order_by_id_error_propagates_and_closes(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_purchase_order = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import resource_purchase_order_by_id
-
-        with pytest.raises(Exception, match="API error"):
-            await resource_purchase_order_by_id("po-1")
-
-        mock_instance.aclose.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_sale_by_id_error_propagates_and_closes(self, mock_cin7_class):
-        mock_class, mock_instance = mock_cin7_class
-        mock_instance.get_sale = AsyncMock(side_effect=Exception("API error"))
-
-        from mcp_cin7_core.mcp_server import resource_sale_by_id
-
-        with pytest.raises(Exception, match="API error"):
-            await resource_sale_by_id("sale-1")
-
-        mock_instance.aclose.assert_called_once()

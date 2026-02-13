@@ -4,7 +4,7 @@ This module provides a minimal wrapper around the existing FastMCP server
 to enable stdio transport for local development with Claude Desktop.
 
 Usage:
-    python -m mcp_cin7_core.stdio_server
+    python -m cin7_core_server.stdio_server
 
 Environment Variables (required):
     CIN7_ACCOUNT_ID - Cin7 Core account identifier
@@ -16,13 +16,13 @@ Environment Variables (optional):
     CIN7_BASE_URL - API base URL (defaults to production)
 """
 
-from .mcp_server import server
+from .server import server
 
 
 def main():
     """Run the MCP server using stdio transport for Claude Desktop.
 
-    This reuses the existing FastMCP server instance from mcp_server.py,
+    This reuses the existing FastMCP server instance from server.py,
     ensuring identical behavior across HTTP and stdio transports.
 
     No OAuth authentication is required for stdio - the server relies on

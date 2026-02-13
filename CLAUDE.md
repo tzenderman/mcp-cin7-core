@@ -9,7 +9,7 @@ Register your MCP server in the ScaleKit dashboard:
 1. **Navigate to MCP Servers > Add MCP Server**
 2. **Configure server settings:**
    - Server name: `cin7-core`
-   - Resource identifier: Your server URL (e.g., `https://mcp-cin7-core.onrender.com`)
+   - Resource identifier: Your server URL (e.g., `https://your-server.example.com`)
    - Scopes: `cin7:read`, `cin7:write`
 3. **Enable dynamic client registration** (for MCP clients like Claude Desktop)
 4. **Copy your credentials** to `.env`:
@@ -26,7 +26,7 @@ The server implements ScaleKit authentication interceptors to enforce an email a
 
 **Interceptor Endpoints:**
 - `POST /auth/interceptors/pre-signup` - Called before a user creates a new organization
-- `POST /auth/interceptors/pre-session-create` - Called before session tokens are issued
+- `POST /auth/interceptors/pre-session-creation` - Called before session tokens are issued
 
 **ScaleKit Dashboard Configuration:**
 
@@ -107,51 +107,49 @@ When adding a new Cin7 API endpoint, follow this order:
 
 1. **Add mock data** to `tests/fixtures/` for the new endpoint's API responses
 2. **Write client tests** in `test_cin7_client.py`:
-   - Mock the HTTP layer (`mock_client.client.get/post/put = AsyncMock(...)`)
+   - Mock `_request` (`mock_client._request = AsyncMock(return_value=mock_resp)`)
    - Verify correct URL, params, and payload sent
    - Verify response parsing and error handling
 3. **Write MCP tool tests** in `test_mcp_server.py`:
    - Mock the client layer (`mock_instance.method = AsyncMock(...)`)
    - Verify correct client method called with right args
    - Verify field projection applied (if applicable)
-   - Verify `aclose()` always called
 4. **Implement the client method** in `cin7_client.py`
-5. **Implement the MCP tool** in `mcp_server.py`
+5. **Implement the MCP tool** in the appropriate `resources/*.py` module
 6. **Run `uv run pytest`** to verify all tests pass
 7. **Add resource/prompt tests** if the endpoint has templates or workflow guides
 
 ### Test Patterns
 
-**Client test** (mock HTTP, verify params/responses/errors):
+**Client test** (mock `_request`, verify params/responses/errors):
 ```python
 async def test_list_products_with_name_filter(self, mock_client):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = PRODUCT_LIST_RESPONSE
-    mock_client.client.get = AsyncMock(return_value=mock_resp)
+    mock_client._request = AsyncMock(return_value=mock_resp)
 
     result = await mock_client.list_products(name="Widget")
 
-    call_args = mock_client.client.get.call_args
+    call_args = mock_client._request.call_args
     params = call_args.kwargs.get("params", {})
     assert params["Name"] == "Widget"
     assert "Products" in result
 ```
 
-**MCP tool test** (mock client, verify delegation/projection/cleanup):
+**MCP tool test** (mock client, verify delegation/projection):
 ```python
 async def test_cin7_products_default_projection(self, mock_cin7_class):
     mock_class, mock_instance = mock_cin7_class
     mock_instance.list_products = AsyncMock(return_value=PRODUCT_LIST_RESPONSE)
 
-    from mcp_cin7_core.mcp_server import cin7_products
+    from cin7_core_server.resources.products import cin7_products
     result = await cin7_products()
 
     item = result["Products"][0]
     assert "SKU" in item
     assert "Name" in item
     assert "Brand" not in item  # Excluded by default projection
-    mock_instance.aclose.assert_called_once()
 ```
 
 ### Mock Data Fixtures
@@ -169,22 +167,34 @@ To add new fixtures: create constants in the appropriate module following the ex
 
 ### Core Components
 
-**`src/mcp_cin7_core/cin7_client.py`** - Async HTTP client for Cin7 Core API
-- Uses `httpx.AsyncClient` for all API communication
+**`cin7_core_server/cin7_client.py`** - Async HTTP client for Cin7 Core API
+- Per-request `httpx.AsyncClient` pattern (no persistent connection)
+- Exponential backoff retry on 429/5xx errors and network/timeout failures (3 attempts)
 - Automatic request/response logging with header redaction
 - Built-in error handling with `Cin7ClientError`
 - Created via `Cin7Client.from_env()` which reads environment variables
-- Always call `await client.aclose()` after use to clean up connections
 
-**`src/mcp_cin7_core/mcp_server.py`** - MCP server implementation using FastMCP
-- Exposes MCP tools for Cin7 Core operations (products, suppliers, sales)
-- Provides MCP resources for templates (products, suppliers)
-- Provides MCP prompts for workflow guidance
+**`cin7_core_server/server.py`** - Slim MCP server registration
+- Imports tool/resource/prompt functions from `resources/` modules
+- Registers everything with FastMCP via `create_mcp_server()`
 - Tools follow naming convention: `cin7_<resource>` (e.g., `cin7_products`, `cin7_get_product`)
-- Implements product snapshot system for handling large datasets (see Snapshot System below)
-- All tool calls log entry/exit with truncated payloads for debugging
 
-**`src/mcp_cin7_core/http_server.py`** - FastAPI HTTP wrapper for MCP Streamable HTTP transport
+**`cin7_core_server/resources/`** - Modular tool implementations
+- `auth.py` - `cin7_status`, `cin7_me`
+- `products.py` - CRUD for products with field projection
+- `suppliers.py` - CRUD for suppliers
+- `sales.py` - Sales list/get/create/update (two-step API)
+- `purchase_orders.py` - PO list/get/create (two-step API)
+- `stock.py` - Stock levels, get_stock, stock transfers
+- `snapshots.py` - Product + stock snapshot build/status/chunk/close
+- `templates.py` - Resource handlers for templates (product, supplier, PO, sale)
+- `prompts.py` - Workflow prompts (create_product, update_batch, etc.)
+
+**`cin7_core_server/utils/`** - Shared utilities
+- `projection.py` - Field projection helpers (`project_items`, `project_stock_items`)
+- `logging.py` - Logging setup and `truncate` helper
+
+**`cin7_core_server/http_server.py`** - FastAPI HTTP wrapper for MCP Streamable HTTP transport
 - Mounts the FastMCP server at `/mcp` endpoint
 - Provides Bearer token authentication middleware
 - Health check endpoint at `/health`
@@ -223,14 +233,11 @@ Snapshots:
 
 ### API Integration Pattern
 
-All tools follow this pattern:
+All tools follow this pattern (no cleanup needed - per-request client):
 ```python
 client = Cin7Client.from_env()
-try:
-    result = await client.<operation>()
-    return result
-finally:
-    await client.aclose()
+result = await client.<operation>()
+return result
 ```
 
 ### Logging
@@ -330,7 +337,7 @@ For large catalogs, use the snapshot workflow:
 
 ## Development Notes
 
-- All async operations use `httpx.AsyncClient` - ensure proper cleanup with `aclose()`
+- Per-request `httpx.AsyncClient` with automatic retry (no manual cleanup needed)
 - Rate limit info available in response headers: `X-RateLimit-Remaining`
 - Product and supplier IDs have different types (int vs string) - respect API schema
 - Field projection reduces data transfer and improves performance for large datasets

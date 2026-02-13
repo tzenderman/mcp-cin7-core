@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mcp_cin7_core.cin7_client import Cin7Client, Cin7ClientError
+from cin7_core_server.cin7_client import Cin7Client, Cin7ClientError
 
 from tests.fixtures.common import (
     ME_RESPONSE,
@@ -70,7 +70,7 @@ class TestFromEnv:
             assert client.account_id == "my_account"
             assert client.application_key == "my_key"
             assert client.base_url.endswith("/")
-            await client.aclose()
+
 
     async def test_missing_account_id(self):
         """Should raise Cin7ClientError when CIN7_ACCOUNT_ID is missing."""
@@ -93,7 +93,7 @@ class TestFromEnv:
         }, clear=False):
             client = Cin7Client.from_env()
             assert client.base_url == "https://custom.api.com/v2/"
-            await client.aclose()
+
 
     async def test_default_base_url(self):
         """Should use default DEAR base URL when CIN7_BASE_URL is not set."""
@@ -110,7 +110,7 @@ class TestFromEnv:
             with patch.dict("os.environ", env_copy, clear=True):
                 client = Cin7Client.from_env()
                 assert client.base_url == "https://inventory.dearsystems.com/ExternalApi/v2/"
-                await client.aclose()
+    
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ class TestHealthCheck:
         mock_resp.json.return_value = HEALTH_CHECK_RESPONSE
         mock_resp.text = str(HEALTH_CHECK_RESPONSE)
         mock_resp.headers = {"X-RateLimit-Remaining": "95"}
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.health_check()
 
@@ -136,7 +136,7 @@ class TestHealthCheck:
         assert result["status"] == 200
         assert result["sample_count"] == 1
         assert result["rate_limit_remaining"] == "95"
-        mock_client.client.get.assert_called_once()
+        mock_client._request.assert_called_once()
 
     async def test_auth_failure_401_raises(self, mock_client):
         """Should raise Cin7ClientError on 401 auth failure."""
@@ -144,7 +144,7 @@ class TestHealthCheck:
         mock_resp.status_code = 401
         mock_resp.json.return_value = {"error": "Unauthorized"}
         mock_resp.text = ERROR_AUTH_401
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Cin7 Core auth failed or API error"):
             await mock_client.health_check()
@@ -155,7 +155,7 @@ class TestHealthCheck:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Internal Server Error"}
         mock_resp.text = "Internal Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Cin7 Core auth failed or API error"):
             await mock_client.health_check()
@@ -175,13 +175,13 @@ class TestGetMe:
         mock_resp.status_code = 200
         mock_resp.json.return_value = ME_RESPONSE
         mock_resp.text = str(ME_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_me()
 
         assert result["Company"] == "Acme Corp"
         assert result["Currency"] == "USD"
-        mock_client.client.get.assert_called_once_with("Me")
+        mock_client._request.assert_called_once_with("get", "Me")
 
     async def test_api_error_raises(self, mock_client):
         """Should raise Cin7ClientError on API error."""
@@ -189,7 +189,7 @@ class TestGetMe:
         mock_resp.status_code = 403
         mock_resp.json.return_value = {"error": "Forbidden"}
         mock_resp.text = "Forbidden"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Me endpoint error"):
             await mock_client.get_me()
@@ -209,7 +209,7 @@ class TestListProducts:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PRODUCT_LIST_RESPONSE
         mock_resp.text = str(PRODUCT_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.list_products()
 
@@ -223,11 +223,11 @@ class TestListProducts:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PRODUCT_LIST_RESPONSE
         mock_resp.text = str(PRODUCT_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         await mock_client.list_products(name="Widget")
 
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["Name"] == "Widget"
 
@@ -237,11 +237,11 @@ class TestListProducts:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PRODUCT_LIST_RESPONSE
         mock_resp.text = str(PRODUCT_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         await mock_client.list_products(sku="WIDGET-001")
 
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["SKU"] == "WIDGET-001"
 
@@ -251,7 +251,7 @@ class TestListProducts:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Product list error"):
             await mock_client.list_products()
@@ -271,13 +271,13 @@ class TestGetProduct:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"Products": [PRODUCT_SINGLE], "Total": 1}
         mock_resp.text = str({"Products": [PRODUCT_SINGLE]})
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_product(product_id="prod-abc-123")
 
         assert result["ID"] == "prod-abc-123"
         assert result["SKU"] == "WIDGET-001"
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["ID"] == "prod-abc-123"
 
@@ -287,12 +287,12 @@ class TestGetProduct:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"Products": [PRODUCT_SINGLE], "Total": 1}
         mock_resp.text = str({"Products": [PRODUCT_SINGLE]})
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_product(sku="WIDGET-001")
 
         assert result["SKU"] == "WIDGET-001"
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["SKU"] == "WIDGET-001"
 
@@ -302,7 +302,7 @@ class TestGetProduct:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PRODUCT_EMPTY_LIST
         mock_resp.text = str(PRODUCT_EMPTY_LIST)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         # PRODUCT_EMPTY_LIST is {"Products": [], "Total": 0} which is truthy
         result = await mock_client.get_product(product_id="nonexistent")
@@ -319,7 +319,7 @@ class TestGetProduct:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Product get error"):
             await mock_client.get_product(product_id="prod-abc-123")
@@ -339,14 +339,14 @@ class TestSaveProduct:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PRODUCT_SAVE_RESPONSE
         mock_resp.text = str(PRODUCT_SAVE_RESPONSE)
-        mock_client.client.post = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         payload = {"SKU": "NEWPROD-001", "Name": "New Product", "Category": "Test"}
         result = await mock_client.save_product(payload)
 
         assert result["ID"] == "prod-new-789"
         assert result["SKU"] == "NEWPROD-001"
-        mock_client.client.post.assert_called_once_with("Product", json=payload)
+        mock_client._request.assert_called_once_with("post", "Product", json=payload)
 
     async def test_success_201(self, mock_client):
         """Should return product data on 201 created response."""
@@ -354,7 +354,7 @@ class TestSaveProduct:
         mock_resp.status_code = 201
         mock_resp.json.return_value = PRODUCT_SAVE_RESPONSE
         mock_resp.text = str(PRODUCT_SAVE_RESPONSE)
-        mock_client.client.post = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         payload = {"SKU": "NEWPROD-001", "Name": "New Product"}
         result = await mock_client.save_product(payload)
@@ -367,7 +367,7 @@ class TestSaveProduct:
         mock_resp.status_code = 400
         mock_resp.json.return_value = {"error": "Bad Request"}
         mock_resp.text = ERROR_BAD_REQUEST_400
-        mock_client.client.post = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Product save error"):
             await mock_client.save_product({"SKU": "BAD"})
@@ -388,13 +388,13 @@ class TestUpdateProduct:
         mock_resp.json.return_value = PRODUCT_UPDATE_RESPONSE
         mock_resp.text = str(PRODUCT_UPDATE_RESPONSE)
         mock_resp.headers = {}
-        mock_client.client.put = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         payload = {"ID": "prod-abc-123", "Name": "Updated Widget"}
         result = await mock_client.update_product(payload)
 
         assert result["Name"] == "Updated Widget"
-        mock_client.client.put.assert_called_once_with("Product", json=payload)
+        mock_client._request.assert_called_once_with("put", "Product", json=payload)
 
     async def test_success_204(self, mock_client):
         """Should return data on 204 no-content response."""
@@ -403,7 +403,7 @@ class TestUpdateProduct:
         mock_resp.json.return_value = PRODUCT_UPDATE_RESPONSE
         mock_resp.text = str(PRODUCT_UPDATE_RESPONSE)
         mock_resp.headers = {}
-        mock_client.client.put = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         payload = {"ID": "prod-abc-123", "Name": "Updated Widget"}
         result = await mock_client.update_product(payload)
@@ -417,7 +417,7 @@ class TestUpdateProduct:
         mock_resp.json.return_value = {"error": "Bad Request"}
         mock_resp.text = ERROR_BAD_REQUEST_400
         mock_resp.headers = {}
-        mock_client.client.put = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Product update error"):
             await mock_client.update_product({"ID": "prod-abc-123"})
@@ -437,7 +437,7 @@ class TestListSuppliers:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SUPPLIER_LIST_RESPONSE
         mock_resp.text = str(SUPPLIER_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.list_suppliers()
 
@@ -451,11 +451,11 @@ class TestListSuppliers:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SUPPLIER_LIST_RESPONSE
         mock_resp.text = str(SUPPLIER_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         await mock_client.list_suppliers(name="Acme")
 
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["Name"] == "Acme"
 
@@ -465,7 +465,7 @@ class TestListSuppliers:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Supplier list error"):
             await mock_client.list_suppliers()
@@ -485,13 +485,13 @@ class TestGetSupplier:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SUPPLIER_LIST_RESPONSE
         mock_resp.text = str(SUPPLIER_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_supplier(supplier_id="sup-abc-123")
 
         assert result["ID"] == "sup-abc-123"
         assert result["Name"] == "Acme Supplies"
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["ID"] == "sup-abc-123"
 
@@ -501,12 +501,12 @@ class TestGetSupplier:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SUPPLIER_LIST_RESPONSE
         mock_resp.text = str(SUPPLIER_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_supplier(name="Acme Supplies")
 
         assert result["Name"] == "Acme Supplies"
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["Name"] == "Acme Supplies"
 
@@ -516,7 +516,7 @@ class TestGetSupplier:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SUPPLIER_EMPTY_LIST
         mock_resp.text = str(SUPPLIER_EMPTY_LIST)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         # SUPPLIER_EMPTY_LIST is {"SupplierList": [], "Total": 0} which is truthy
         result = await mock_client.get_supplier(supplier_id="nonexistent")
@@ -533,7 +533,7 @@ class TestGetSupplier:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Supplier get error"):
             await mock_client.get_supplier(supplier_id="sup-abc-123")
@@ -553,14 +553,14 @@ class TestSaveSupplier:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SUPPLIER_SAVE_RESPONSE
         mock_resp.text = str(SUPPLIER_SAVE_RESPONSE)
-        mock_client.client.post = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         payload = {"Name": "New Supplier", "ContactPerson": "Bob Wilson"}
         result = await mock_client.save_supplier(payload)
 
         assert result["ID"] == "sup-new-789"
         assert result["Name"] == "New Supplier"
-        mock_client.client.post.assert_called_once_with("Supplier", json=payload)
+        mock_client._request.assert_called_once_with("post", "Supplier", json=payload)
 
     async def test_api_error_raises(self, mock_client):
         """Should raise Cin7ClientError on API error."""
@@ -568,7 +568,7 @@ class TestSaveSupplier:
         mock_resp.status_code = 400
         mock_resp.json.return_value = {"error": "Bad Request"}
         mock_resp.text = ERROR_BAD_REQUEST_400
-        mock_client.client.post = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Supplier save error"):
             await mock_client.save_supplier({"Name": "Bad"})
@@ -588,13 +588,13 @@ class TestUpdateSupplier:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SUPPLIER_UPDATE_RESPONSE
         mock_resp.text = str(SUPPLIER_UPDATE_RESPONSE)
-        mock_client.client.put = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         payload = {"ID": "sup-abc-123", "Name": "Acme Supplies Updated"}
         result = await mock_client.update_supplier(payload)
 
         assert result["Name"] == "Acme Supplies Updated"
-        mock_client.client.put.assert_called_once_with("Supplier", json=payload)
+        mock_client._request.assert_called_once_with("put", "Supplier", json=payload)
 
     async def test_api_error_raises(self, mock_client):
         """Should raise Cin7ClientError on API error."""
@@ -602,7 +602,7 @@ class TestUpdateSupplier:
         mock_resp.status_code = 400
         mock_resp.json.return_value = {"error": "Bad Request"}
         mock_resp.text = ERROR_BAD_REQUEST_400
-        mock_client.client.put = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Supplier update error"):
             await mock_client.update_supplier({"ID": "sup-abc-123"})
@@ -622,7 +622,7 @@ class TestListSales:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SALE_LIST_RESPONSE
         mock_resp.text = str(SALE_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.list_sales()
 
@@ -636,11 +636,11 @@ class TestListSales:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SALE_LIST_RESPONSE
         mock_resp.text = str(SALE_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         await mock_client.list_sales(search="Test Customer")
 
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["Search"] == "Test Customer"
 
@@ -650,7 +650,7 @@ class TestListSales:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Sale list error"):
             await mock_client.list_sales()
@@ -670,13 +670,13 @@ class TestGetSale:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SALE_SINGLE
         mock_resp.text = str(SALE_SINGLE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_sale(sale_id="sale-abc-123")
 
         assert result["ID"] == "sale-abc-123"
         assert result["Customer"] == "Test Customer"
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["ID"] == "sale-abc-123"
 
@@ -686,7 +686,7 @@ class TestGetSale:
         mock_resp.status_code = 200
         mock_resp.json.return_value = SALE_SINGLE
         mock_resp.text = str(SALE_SINGLE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         await mock_client.get_sale(
             sale_id="sale-abc-123",
@@ -695,7 +695,7 @@ class TestGetSale:
             include_transactions=True,
         )
 
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["CombineAdditionalCharges"] == "true"
         assert params["HideInventoryMovements"] == "true"
@@ -712,7 +712,7 @@ class TestGetSale:
         mock_resp.status_code = 404
         mock_resp.json.return_value = {"error": "Not Found"}
         mock_resp.text = "Not Found"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Sale get error"):
             await mock_client.get_sale(sale_id="nonexistent")
@@ -732,7 +732,7 @@ class TestListPurchaseOrders:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PO_LIST_RESPONSE
         mock_resp.text = str(PO_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.list_purchase_orders()
 
@@ -746,11 +746,11 @@ class TestListPurchaseOrders:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PO_LIST_RESPONSE
         mock_resp.text = str(PO_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         await mock_client.list_purchase_orders(search="Acme")
 
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["Search"] == "Acme"
 
@@ -760,7 +760,7 @@ class TestListPurchaseOrders:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Purchase Order list error"):
             await mock_client.list_purchase_orders()
@@ -780,13 +780,13 @@ class TestGetPurchaseOrder:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"PurchaseList": [PO_SINGLE], "Total": 1}
         mock_resp.text = str({"PurchaseList": [PO_SINGLE]})
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_purchase_order(purchase_order_id="po-abc-123")
 
         assert result["ID"] == "po-abc-123"
         assert result["Supplier"] == "Acme Supplies"
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["ID"] == "po-abc-123"
 
@@ -797,7 +797,7 @@ class TestGetPurchaseOrder:
         empty_response = {"PurchaseList": [], "Total": 0}
         mock_resp.json.return_value = empty_response
         mock_resp.text = str(empty_response)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         # The data dict is truthy so it falls through to return data
         result = await mock_client.get_purchase_order(purchase_order_id="nonexistent")
@@ -814,7 +814,7 @@ class TestGetPurchaseOrder:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Purchase Order get error"):
             await mock_client.get_purchase_order(purchase_order_id="po-abc-123")
@@ -834,7 +834,7 @@ class TestListStockTransfers:
         mock_resp.status_code = 200
         mock_resp.json.return_value = STOCK_TRANSFER_LIST_RESPONSE
         mock_resp.text = str(STOCK_TRANSFER_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.list_stock_transfers()
 
@@ -848,11 +848,11 @@ class TestListStockTransfers:
         mock_resp.status_code = 200
         mock_resp.json.return_value = STOCK_TRANSFER_LIST_RESPONSE
         mock_resp.text = str(STOCK_TRANSFER_LIST_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         await mock_client.list_stock_transfers(search="Main Warehouse")
 
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["Search"] == "Main Warehouse"
 
@@ -862,7 +862,7 @@ class TestListStockTransfers:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Stock Transfer list error"):
             await mock_client.list_stock_transfers()
@@ -885,13 +885,13 @@ class TestGetStockTransfer:
             "Total": 1,
         }
         mock_resp.text = str({"StockTransferList": [STOCK_TRANSFER_SINGLE]})
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_stock_transfer(stock_transfer_id="st-task-001")
 
         assert result["TaskID"] == "st-task-001"
         assert result["FromLocation"] == "Main Warehouse"
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["TaskID"] == "st-task-001"
 
@@ -901,7 +901,7 @@ class TestGetStockTransfer:
         mock_resp.status_code = 400
         mock_resp.json.return_value = STOCK_TRANSFER_NOT_FOUND_400
         mock_resp.text = str(STOCK_TRANSFER_NOT_FOUND_400)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Stock Transfer not found"):
             await mock_client.get_stock_transfer(stock_transfer_id="st-nonexistent")
@@ -912,7 +912,7 @@ class TestGetStockTransfer:
         mock_resp.status_code = 400
         mock_resp.json.return_value = [{"Exception": "Some other error"}]
         mock_resp.text = "Some other error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Stock Transfer get error"):
             await mock_client.get_stock_transfer(stock_transfer_id="st-bad")
@@ -928,7 +928,7 @@ class TestGetStockTransfer:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="Stock Transfer get error"):
             await mock_client.get_stock_transfer(stock_transfer_id="st-task-001")
@@ -948,13 +948,13 @@ class TestGetProductSuppliers:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PRODUCT_SUPPLIERS_RESPONSE
         mock_resp.text = str(PRODUCT_SUPPLIERS_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_product_suppliers(product_id="prod-abc-123")
 
         assert "Products" in result
         assert result["Products"][0]["ProductID"] == "prod-abc-123"
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["ID"] == "prod-abc-123"
 
@@ -964,12 +964,12 @@ class TestGetProductSuppliers:
         mock_resp.status_code = 200
         mock_resp.json.return_value = PRODUCT_SUPPLIERS_RESPONSE
         mock_resp.text = str(PRODUCT_SUPPLIERS_RESPONSE)
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_product_suppliers(sku="WIDGET-001")
 
         assert "Products" in result
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["SKU"] == "WIDGET-001"
 
@@ -984,7 +984,7 @@ class TestGetProductSuppliers:
         mock_resp.status_code = 500
         mock_resp.json.return_value = {"error": "Server Error"}
         mock_resp.text = "Server Error"
-        mock_client.client.get = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="ProductSuppliers get error"):
             await mock_client.get_product_suppliers(product_id="prod-abc-123")
@@ -1005,7 +1005,7 @@ class TestUpdateProductSuppliers:
         mock_resp.json.return_value = PRODUCT_SUPPLIERS_UPDATE_RESPONSE
         mock_resp.text = str(PRODUCT_SUPPLIERS_UPDATE_RESPONSE)
         mock_resp.headers = {}
-        mock_client.client.put = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         products = [
             {
@@ -1019,7 +1019,7 @@ class TestUpdateProductSuppliers:
 
         assert "Products" in result
         assert result["Products"][0]["Suppliers"][0]["SupplierName"] == "New Supplier"
-        call_args = mock_client.client.put.call_args
+        call_args = mock_client._request.call_args
         sent_payload = call_args.kwargs.get("json", call_args[1].get("json", {}))
         assert sent_payload == {"Products": products}
 
@@ -1030,7 +1030,7 @@ class TestUpdateProductSuppliers:
         mock_resp.json.return_value = {"error": "Bad Request"}
         mock_resp.text = ERROR_BAD_REQUEST_400
         mock_resp.headers = {}
-        mock_client.client.put = AsyncMock(return_value=mock_resp)
+        mock_client._request = AsyncMock(return_value=mock_resp)
 
         with pytest.raises(Cin7ClientError, match="ProductSuppliers update error"):
             await mock_client.update_product_suppliers([{"ProductID": "bad"}])
@@ -1054,27 +1054,27 @@ class TestListProductAvailability:
             ],
             "Total": 1
         }
-        mock_client.client.get = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         result = await mock_client.list_product_availability(page=1, limit=100)
 
         assert "ProductAvailabilityList" in result
         assert len(result["ProductAvailabilityList"]) == 1
         assert result["ProductAvailabilityList"][0]["SKU"] == "TEST-001"
-        mock_client.client.get.assert_called_once()
+        mock_client._request.assert_called_once()
 
     async def test_passes_filter_params(self, mock_client):
         """Should pass SKU and location filters to API."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"ProductAvailabilityList": [], "Total": 0}
-        mock_client.client.get = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         await mock_client.list_product_availability(
             page=2, limit=50, sku="TEST-001", location="Main"
         )
 
-        call_args = mock_client.client.get.call_args
+        call_args = mock_client._request.call_args
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["Page"] == 2
         assert params["Limit"] == 50
@@ -1101,7 +1101,7 @@ class TestGetProductAvailability:
             ],
             "Total": 2
         }
-        mock_client.client.get = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         result = await mock_client.get_product_availability(sku="TEST-001")
 
@@ -1148,7 +1148,7 @@ class TestSaveSale:
         }
 
         # Mock post to return different responses for each call
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Customer": "Test Customer",
@@ -1169,19 +1169,21 @@ class TestSaveSale:
         result = await mock_client.save_sale(payload)
 
         # Should have made two POST calls
-        assert mock_client.client.post.call_count == 2
+        assert mock_client._request.call_count == 2
 
         # First call: POST /Sale (header only, no Lines)
-        first_call = mock_client.client.post.call_args_list[0]
-        assert first_call[0][0] == "Sale"
+        first_call = mock_client._request.call_args_list[0]
+        assert first_call[0][0] == "post"
+        assert first_call[0][1] == "Sale"
         first_payload = first_call.kwargs.get("json", first_call[1].get("json", {}))
         assert "Lines" not in first_payload
         assert first_payload.get("Customer") == "Test Customer"
         assert first_payload.get("SkipQuote") == True
 
         # Second call: POST /sale/order with SaleID and Lines
-        second_call = mock_client.client.post.call_args_list[1]
-        assert second_call[0][0] == "sale/order"
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][0] == "post"
+        assert second_call[0][1] == "sale/order"
         second_payload = second_call.kwargs.get("json", second_call[1].get("json", {}))
         assert second_payload.get("SaleID") == "sale-123"
         assert "Lines" in second_payload
@@ -1201,7 +1203,7 @@ class TestSaveSale:
             "Customer": "Test Customer",
             "Status": "DRAFT"
         }
-        mock_client.client.post = AsyncMock(return_value=header_response)
+        mock_client._request = AsyncMock(return_value=header_response)
 
         payload = {
             "Customer": "Test Customer",
@@ -1210,7 +1212,7 @@ class TestSaveSale:
         result = await mock_client.save_sale(payload)
 
         # Should only make one POST call
-        assert mock_client.client.post.call_count == 1
+        assert mock_client._request.call_count == 1
         assert result["ID"] == "sale-123"
 
     async def test_defaults_status_to_draft(self, mock_client):
@@ -1219,12 +1221,12 @@ class TestSaveSale:
         header_response.status_code = 200
         header_response.text = '{"ID": "sale-123"}'
         header_response.json.return_value = {"ID": "sale-123"}
-        mock_client.client.post = AsyncMock(return_value=header_response)
+        mock_client._request = AsyncMock(return_value=header_response)
 
         payload = {"Customer": "Test", "Location": "MAIN"}
         await mock_client.save_sale(payload)
 
-        call_args = mock_client.client.post.call_args
+        call_args = mock_client._request.call_args
         sent_payload = call_args.kwargs.get("json", call_args[1].get("json", {}))
         assert sent_payload.get("Status") == "DRAFT"
 
@@ -1234,12 +1236,12 @@ class TestSaveSale:
         header_response.status_code = 200
         header_response.text = '{"ID": "sale-123"}'
         header_response.json.return_value = {"ID": "sale-123"}
-        mock_client.client.post = AsyncMock(return_value=header_response)
+        mock_client._request = AsyncMock(return_value=header_response)
 
         payload = {"Customer": "Test", "Location": "MAIN"}
         await mock_client.save_sale(payload)
 
-        call_args = mock_client.client.post.call_args
+        call_args = mock_client._request.call_args
         sent_payload = call_args.kwargs.get("json", call_args[1].get("json", {}))
         assert sent_payload.get("SkipQuote") == True
 
@@ -1249,7 +1251,7 @@ class TestSaveSale:
         mock_response.status_code = 400
         mock_response.text = "Bad Request: Customer is required"
         mock_response.json.return_value = {"error": "Customer is required"}
-        mock_client.client.post = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         payload = {"Location": "MAIN", "Lines": [{"ProductID": "123"}]}
         with pytest.raises(Cin7ClientError, match="header creation error"):
@@ -1269,7 +1271,7 @@ class TestSaveSale:
         order_response.text = "Bad Request: Invalid product"
         order_response.json.return_value = {"error": "Invalid product"}
 
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Customer": "Test",
@@ -1285,7 +1287,7 @@ class TestSaveSale:
         mock_response.status_code = 200
         mock_response.text = '{"Customer": "Test"}'
         mock_response.json.return_value = {"Customer": "Test"}  # No ID field
-        mock_client.client.post = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         payload = {"Customer": "Test", "Location": "MAIN", "Lines": [{"ProductID": "123"}]}
         with pytest.raises(Cin7ClientError, match="No ID returned"):
@@ -1310,7 +1312,7 @@ class TestUpdateSale:
             "Customer": "Updated Customer"
         }
         mock_response.headers = {}
-        mock_client.client.put = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         payload = {
             "SaleID": "abc-123",
@@ -1321,7 +1323,7 @@ class TestUpdateSale:
 
         assert result["SaleID"] == "abc-123"
         assert result["Customer"] == "Updated Customer"
-        mock_client.client.put.assert_called_once()
+        mock_client._request.assert_called_once()
 
     async def test_raises_on_api_error(self, mock_client):
         """Should raise Cin7ClientError on non-2xx response."""
@@ -1330,7 +1332,7 @@ class TestUpdateSale:
         mock_response.text = "Sale not found"
         mock_response.json.return_value = {"error": "Sale not found"}
         mock_response.headers = {}
-        mock_client.client.put = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         payload = {"SaleID": "nonexistent", "Customer": "Test"}
         with pytest.raises(Cin7ClientError, match="Sale update error"):
@@ -1370,7 +1372,7 @@ class TestSavePurchaseOrder:
         }
 
         # Mock post to return different responses for each call
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Supplier": "Test Supplier",
@@ -1391,18 +1393,20 @@ class TestSavePurchaseOrder:
         result = await mock_client.save_purchase_order(payload)
 
         # Should have made two POST calls
-        assert mock_client.client.post.call_count == 2
+        assert mock_client._request.call_count == 2
 
         # First call: POST /Purchase (header only, no Lines)
-        first_call = mock_client.client.post.call_args_list[0]
-        assert first_call[0][0] == "Purchase"
+        first_call = mock_client._request.call_args_list[0]
+        assert first_call[0][0] == "post"
+        assert first_call[0][1] == "Purchase"
         first_payload = first_call.kwargs.get("json", first_call[1].get("json", {}))
         assert "Lines" not in first_payload
         assert first_payload.get("Supplier") == "Test Supplier"
 
         # Second call: POST /purchase/order with TaskID and Lines
-        second_call = mock_client.client.post.call_args_list[1]
-        assert second_call[0][0] == "purchase/order"
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][0] == "post"
+        assert second_call[0][1] == "purchase/order"
         second_payload = second_call.kwargs.get("json", second_call[1].get("json", {}))
         assert second_payload.get("TaskID") == "task-123"
         assert "Lines" in second_payload
@@ -1422,7 +1426,7 @@ class TestSavePurchaseOrder:
             "Supplier": "Test Supplier",
             "Status": "DRAFT"
         }
-        mock_client.client.post = AsyncMock(return_value=header_response)
+        mock_client._request = AsyncMock(return_value=header_response)
 
         payload = {
             "Supplier": "Test Supplier",
@@ -1431,7 +1435,7 @@ class TestSavePurchaseOrder:
         result = await mock_client.save_purchase_order(payload)
 
         # Should only make one POST call
-        assert mock_client.client.post.call_count == 1
+        assert mock_client._request.call_count == 1
         assert result["ID"] == "task-123"
 
     async def test_defaults_status_to_draft(self, mock_client):
@@ -1440,12 +1444,12 @@ class TestSavePurchaseOrder:
         header_response.status_code = 200
         header_response.text = '{"ID": "task-123"}'
         header_response.json.return_value = {"ID": "task-123"}
-        mock_client.client.post = AsyncMock(return_value=header_response)
+        mock_client._request = AsyncMock(return_value=header_response)
 
         payload = {"Supplier": "Test", "Location": "MAIN"}
         await mock_client.save_purchase_order(payload)
 
-        call_args = mock_client.client.post.call_args
+        call_args = mock_client._request.call_args
         sent_payload = call_args.kwargs.get("json", call_args[1].get("json", {}))
         assert sent_payload.get("Status") == "DRAFT"
 
@@ -1455,7 +1459,7 @@ class TestSavePurchaseOrder:
         mock_response.status_code = 400
         mock_response.text = "Bad Request: Supplier is required"
         mock_response.json.return_value = {"error": "Supplier is required"}
-        mock_client.client.post = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         payload = {"Location": "MAIN", "Lines": [{"ProductID": "123"}]}
         with pytest.raises(Cin7ClientError, match="header creation error"):
@@ -1475,7 +1479,7 @@ class TestSavePurchaseOrder:
         order_response.text = "Bad Request: Invalid product"
         order_response.json.return_value = {"error": "Invalid product"}
 
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Supplier": "Test",
@@ -1491,7 +1495,7 @@ class TestSavePurchaseOrder:
         mock_response.status_code = 200
         mock_response.text = '{"Supplier": "Test"}'
         mock_response.json.return_value = {"Supplier": "Test"}  # No ID field
-        mock_client.client.post = AsyncMock(return_value=mock_response)
+        mock_client._request = AsyncMock(return_value=mock_response)
 
         payload = {"Supplier": "Test", "Location": "MAIN", "Lines": [{"ProductID": "123"}]}
         with pytest.raises(Cin7ClientError, match="No TaskID returned"):
@@ -1518,7 +1522,7 @@ class TestSaveSaleAdditionalChargesAndMemo:
         order_response.text = '{"SaleID": "sale-123", "Lines": []}'
         order_response.json.return_value = {"SaleID": "sale-123", "Lines": []}
 
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Customer": "Test Customer",
@@ -1532,8 +1536,8 @@ class TestSaveSaleAdditionalChargesAndMemo:
         }
         await mock_client.save_sale(payload)
 
-        assert mock_client.client.post.call_count == 2
-        second_call = mock_client.client.post.call_args_list[1]
+        assert mock_client._request.call_count == 2
+        second_call = mock_client._request.call_args_list[1]
         second_payload = second_call.kwargs.get("json", second_call[1].get("json", {}))
         assert second_payload["AdditionalCharges"] == [{"Description": "Freight", "Price": 10}]
         assert second_payload["Memo"] == "Test memo"
@@ -1551,7 +1555,7 @@ class TestSaveSaleAdditionalChargesAndMemo:
         order_response.text = '{"SaleID": "sale-123", "Lines": []}'
         order_response.json.return_value = {"SaleID": "sale-123", "Lines": []}
 
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Customer": "Test Customer",
@@ -1564,8 +1568,8 @@ class TestSaveSaleAdditionalChargesAndMemo:
         }
         await mock_client.save_sale(payload)
 
-        assert mock_client.client.post.call_count == 2
-        second_call = mock_client.client.post.call_args_list[1]
+        assert mock_client._request.call_count == 2
+        second_call = mock_client._request.call_args_list[1]
         second_payload = second_call.kwargs.get("json", second_call[1].get("json", {}))
         assert second_payload["Memo"] == "Test memo only"
         assert "AdditionalCharges" not in second_payload
@@ -1582,7 +1586,7 @@ class TestSaveSaleAdditionalChargesAndMemo:
         order_response.text = '{"SaleID": "sale-123", "Lines": []}'
         order_response.json.return_value = {"SaleID": "sale-123", "Lines": []}
 
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         original_payload = {
             "Customer": "Test Customer",
@@ -1619,7 +1623,7 @@ class TestSavePurchaseOrderAdditionalChargesAndMemo:
         order_response.text = '{"TaskID": "po-123", "Lines": []}'
         order_response.json.return_value = {"TaskID": "po-123", "Lines": []}
 
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Supplier": "Test Supplier",
@@ -1633,8 +1637,8 @@ class TestSavePurchaseOrderAdditionalChargesAndMemo:
         }
         await mock_client.save_purchase_order(payload)
 
-        assert mock_client.client.post.call_count == 2
-        second_call = mock_client.client.post.call_args_list[1]
+        assert mock_client._request.call_count == 2
+        second_call = mock_client._request.call_args_list[1]
         second_payload = second_call.kwargs.get("json", second_call[1].get("json", {}))
         assert second_payload["AdditionalCharges"] == [{"Description": "Freight", "Price": 15}]
         assert second_payload["Memo"] == "PO memo"
@@ -1646,7 +1650,7 @@ class TestSavePurchaseOrderAdditionalChargesAndMemo:
         header_response.text = '{"ID": "po-123"}'
         header_response.json.return_value = {"ID": "po-123"}
 
-        mock_client.client.post = AsyncMock(return_value=header_response)
+        mock_client._request = AsyncMock(return_value=header_response)
 
         payload = {
             "Supplier": "Test Supplier",
@@ -1655,7 +1659,7 @@ class TestSavePurchaseOrderAdditionalChargesAndMemo:
         }
         await mock_client.save_purchase_order(payload)
 
-        first_call = mock_client.client.post.call_args_list[0]
+        first_call = mock_client._request.call_args_list[0]
         first_payload = first_call.kwargs.get("json", first_call[1].get("json", {}))
         assert "Order" not in first_payload
 
@@ -1680,7 +1684,7 @@ class TestSaveSaleOrphanedId:
         order_response.text = "Bad Request: Invalid product"
         order_response.json.return_value = {"error": "Invalid product"}
 
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Customer": "Test",
@@ -1712,7 +1716,7 @@ class TestSavePurchaseOrderOrphanedId:
         order_response.text = "Bad Request: Invalid product"
         order_response.json.return_value = {"error": "Invalid product"}
 
-        mock_client.client.post = AsyncMock(side_effect=[header_response, order_response])
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
 
         payload = {
             "Supplier": "Test",
@@ -1734,7 +1738,7 @@ class TestNetworkErrors:
     async def test_save_product_network_error_propagates(self, mock_client):
         """Network error in save_product should propagate, not be swallowed."""
         import httpx
-        mock_client.client.post = AsyncMock(
+        mock_client._request = AsyncMock(
             side_effect=httpx.ConnectError("Connection refused")
         )
 
@@ -1744,7 +1748,7 @@ class TestNetworkErrors:
     async def test_update_product_network_error_propagates(self, mock_client):
         """Network error in update_product should propagate, not be swallowed."""
         import httpx
-        mock_client.client.put = AsyncMock(
+        mock_client._request = AsyncMock(
             side_effect=httpx.TimeoutException("timeout")
         )
 
@@ -1754,7 +1758,7 @@ class TestNetworkErrors:
     async def test_save_sale_network_error_propagates(self, mock_client):
         """Network error in save_sale should propagate, not be swallowed."""
         import httpx
-        mock_client.client.post = AsyncMock(
+        mock_client._request = AsyncMock(
             side_effect=httpx.ConnectError("Connection refused")
         )
 
@@ -1777,7 +1781,7 @@ class TestJsonParseFailures:
         response.json.side_effect = ValueError("No JSON object could be decoded")
         response.text = "<html>Server Error</html>"
         response.headers = {"X-RateLimit-Remaining": "99"}
-        mock_client.client.get = AsyncMock(return_value=response)
+        mock_client._request = AsyncMock(return_value=response)
 
         result = await mock_client.health_check()
 
@@ -1792,7 +1796,7 @@ class TestJsonParseFailures:
         response.json.side_effect = ValueError("No JSON object could be decoded")
         response.text = "<html>Server Error</html>"
         response.headers = {"X-RateLimit-Remaining": "99"}
-        mock_client.client.get = AsyncMock(return_value=response)
+        mock_client._request = AsyncMock(return_value=response)
 
         result = await mock_client.get_product(product_id="prod-123")
 
@@ -1805,7 +1809,7 @@ class TestJsonParseFailures:
         response.json.side_effect = ValueError("No JSON object could be decoded")
         response.text = "<html>Server Error</html>"
         response.headers = {"X-RateLimit-Remaining": "99"}
-        mock_client.client.get = AsyncMock(return_value=response)
+        mock_client._request = AsyncMock(return_value=response)
 
         result = await mock_client.list_products()
 
@@ -1818,7 +1822,7 @@ class TestJsonParseFailures:
         response.json.side_effect = ValueError("No JSON object could be decoded")
         response.text = "<html>Server Error</html>"
         response.headers = {"X-RateLimit-Remaining": "99"}
-        mock_client.client.post = AsyncMock(return_value=response)
+        mock_client._request = AsyncMock(return_value=response)
 
         result = await mock_client.save_product({"SKU": "TEST", "Name": "Test"})
 
