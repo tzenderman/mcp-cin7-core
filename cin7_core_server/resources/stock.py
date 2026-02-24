@@ -73,7 +73,7 @@ async def cin7_get_stock(
     - fields: Additional fields to include beyond defaults, or ["*"] for all
 
     Available fields: sku, product_id, locations, total_on_hand, total_available
-        Default returns: sku, product_id
+        Default returns: sku, total_on_hand, total_available
     """
     logger.debug(
         "Tool call: cin7_get_stock(sku=%s, product_id=%s)",
@@ -100,7 +100,7 @@ async def cin7_get_stock(
     }
 
     # Apply field projection
-    result = project_dict(result, fields, base_fields={"sku", "product_id"})
+    result = project_dict(result, fields, base_fields={"sku", "total_on_hand", "total_available"})
 
     logger.debug("Tool result: cin7_get_stock -> %s", truncate(str(result)))
     return result

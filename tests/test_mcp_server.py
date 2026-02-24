@@ -63,7 +63,8 @@ class TestCin7Me:
     """Tests for cin7_me tool."""
 
     @pytest.mark.asyncio
-    async def test_success_returns_me(self, mock_cin7_class):
+    async def test_default_projection_returns_minimal_fields(self, mock_cin7_class):
+        """Default (fields=None) should return only Company, Currency, DefaultLocation."""
         mock_class, mock_instance = mock_cin7_class
         mock_instance.get_me = AsyncMock(return_value=ME_RESPONSE)
 
@@ -72,7 +73,40 @@ class TestCin7Me:
         result = await cin7_me()
 
         mock_instance.get_me.assert_called_once()
+        assert "Company" in result
+        assert "Currency" in result
+        assert "DefaultLocation" in result
+        assert "TimeZone" not in result
+        assert "LockDate" not in result
+        assert "TaxRule" not in result
+
+    @pytest.mark.asyncio
+    async def test_wildcard_returns_all_fields(self, mock_cin7_class):
+        """fields=["*"] should return all fields without projection."""
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_me = AsyncMock(return_value=ME_RESPONSE)
+
+        from cin7_core_server.resources.auth import cin7_me
+
+        result = await cin7_me(fields=["*"])
+
         assert result == ME_RESPONSE
+
+    @pytest.mark.asyncio
+    async def test_extra_fields_added_to_defaults(self, mock_cin7_class):
+        """Requesting extra fields should return them alongside the defaults."""
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_me = AsyncMock(return_value=ME_RESPONSE)
+
+        from cin7_core_server.resources.auth import cin7_me
+
+        result = await cin7_me(fields=["TimeZone"])
+
+        assert "Company" in result
+        assert "Currency" in result
+        assert "DefaultLocation" in result
+        assert "TimeZone" in result
+        assert "LockDate" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -1496,7 +1530,7 @@ class TestStockLevelsTools:
 
     @pytest.mark.asyncio
     async def test_cin7_get_stock_default_projection(self):
-        """Default (fields=None) should return only sku, product_id."""
+        """Default (fields=None) should return sku, total_on_hand, total_available."""
         mock_result = [
             {"SKU": "TEST-001", "Location": "Main", "OnHand": 50.0, "Available": 45.0},
         ]
@@ -1511,14 +1545,14 @@ class TestStockLevelsTools:
             result = await cin7_get_stock(sku="TEST-001")
 
             assert "sku" in result
-            assert "product_id" in result
+            assert "total_on_hand" in result
+            assert "total_available" in result
+            assert "product_id" not in result
             assert "locations" not in result
-            assert "total_on_hand" not in result
-            assert "total_available" not in result
 
     @pytest.mark.asyncio
     async def test_cin7_get_stock_fields_projection(self):
-        """Fields projection keeps base fields (sku, product_id) plus requested fields."""
+        """Fields projection keeps base fields (sku, total_on_hand, total_available) plus requested fields."""
         mock_result = [
             {"SKU": "TEST-001", "Location": "Main", "OnHand": 50.0, "Available": 45.0},
         ]
@@ -1530,13 +1564,13 @@ class TestStockLevelsTools:
 
             from cin7_core_server.resources.stock import cin7_get_stock
 
-            result = await cin7_get_stock(sku="TEST-001", fields=["total_on_hand"])
+            result = await cin7_get_stock(sku="TEST-001", fields=["product_id"])
 
             assert "sku" in result
-            assert "product_id" in result
             assert "total_on_hand" in result
+            assert "total_available" in result
+            assert "product_id" in result
             assert "locations" not in result
-            assert "total_available" not in result
 
 
 # ---------------------------------------------------------------------------
