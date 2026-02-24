@@ -18,19 +18,19 @@ def mock_scalekit_client():
 @pytest.fixture
 def app_with_mocked_scalekit(mock_scalekit_client):
     """Create app with mocked ScaleKit client and patched module-level variables."""
-    with patch("cin7_core_server.http_server.ScalekitClient") as mock_class:
+    with patch("cin7_core_server.server_http.ScalekitClient") as mock_class:
         mock_class.return_value = mock_scalekit_client
 
         # Patch the module-level variables that were read at import time
-        with patch("cin7_core_server.http_server.SCALEKIT_ENVIRONMENT_URL", "https://test.scalekit.com"), \
-             patch("cin7_core_server.http_server.SCALEKIT_CLIENT_ID", "test_client_id"), \
-             patch("cin7_core_server.http_server.SCALEKIT_CLIENT_SECRET", "test_client_secret"), \
-             patch("cin7_core_server.http_server.SCALEKIT_RESOURCE_ID", "res_test"), \
-             patch("cin7_core_server.http_server.SERVER_URL", "https://test.example.com"), \
-             patch("cin7_core_server.http_server.ALLOWED_EMAILS", {"allowed@example.com", "admin@test.com"}), \
-             patch("cin7_core_server.http_server.SCALEKIT_INTERCEPTOR_SECRET", None):
+        with patch("cin7_core_server.server_http.SCALEKIT_ENVIRONMENT_URL", "https://test.scalekit.com"), \
+             patch("cin7_core_server.server_http.SCALEKIT_CLIENT_ID", "test_client_id"), \
+             patch("cin7_core_server.server_http.SCALEKIT_CLIENT_SECRET", "test_client_secret"), \
+             patch("cin7_core_server.server_http.SCALEKIT_RESOURCE_ID", "res_test"), \
+             patch("cin7_core_server.server_http.SERVER_URL", "https://test.example.com"), \
+             patch("cin7_core_server.server_http.ALLOWED_EMAILS", {"allowed@example.com", "admin@test.com"}), \
+             patch("cin7_core_server.server_http.SCALEKIT_INTERCEPTOR_SECRET", None):
 
-            from cin7_core_server.http_server import app
+            from cin7_core_server.server_http import app
             yield app, mock_scalekit_client
 
 
@@ -252,16 +252,16 @@ class TestInterceptorSignatureVerification:
         mock_client = MagicMock()
         mock_client.verify_interceptor_payload.side_effect = Exception("Invalid signature")
 
-        with patch("cin7_core_server.http_server.SCALEKIT_ENVIRONMENT_URL", "https://test.scalekit.com"), \
-             patch("cin7_core_server.http_server.SCALEKIT_CLIENT_ID", "test_client_id"), \
-             patch("cin7_core_server.http_server.SCALEKIT_CLIENT_SECRET", "test_client_secret"), \
-             patch("cin7_core_server.http_server.SCALEKIT_RESOURCE_ID", "res_test"), \
-             patch("cin7_core_server.http_server.SERVER_URL", "https://test.example.com"), \
-             patch("cin7_core_server.http_server.ALLOWED_EMAILS", {"allowed@example.com"}), \
-             patch("cin7_core_server.http_server.SCALEKIT_INTERCEPTOR_SECRET", "test_secret_123"), \
-             patch("cin7_core_server.http_server.scalekit_client", mock_client):
+        with patch("cin7_core_server.server_http.SCALEKIT_ENVIRONMENT_URL", "https://test.scalekit.com"), \
+             patch("cin7_core_server.server_http.SCALEKIT_CLIENT_ID", "test_client_id"), \
+             patch("cin7_core_server.server_http.SCALEKIT_CLIENT_SECRET", "test_client_secret"), \
+             patch("cin7_core_server.server_http.SCALEKIT_RESOURCE_ID", "res_test"), \
+             patch("cin7_core_server.server_http.SERVER_URL", "https://test.example.com"), \
+             patch("cin7_core_server.server_http.ALLOWED_EMAILS", {"allowed@example.com"}), \
+             patch("cin7_core_server.server_http.SCALEKIT_INTERCEPTOR_SECRET", "test_secret_123"), \
+             patch("cin7_core_server.server_http.scalekit_client", mock_client):
 
-            from cin7_core_server.http_server import app
+            from cin7_core_server.server_http import app
             client = TestClient(app)
             payload = {
                 "interceptor_context": {
@@ -285,16 +285,16 @@ class TestInterceptorSignatureVerification:
         mock_client = MagicMock()
         mock_client.verify_interceptor_payload.return_value = True
 
-        with patch("cin7_core_server.http_server.SCALEKIT_ENVIRONMENT_URL", "https://test.scalekit.com"), \
-             patch("cin7_core_server.http_server.SCALEKIT_CLIENT_ID", "test_client_id"), \
-             patch("cin7_core_server.http_server.SCALEKIT_CLIENT_SECRET", "test_client_secret"), \
-             patch("cin7_core_server.http_server.SCALEKIT_RESOURCE_ID", "res_test"), \
-             patch("cin7_core_server.http_server.SERVER_URL", "https://test.example.com"), \
-             patch("cin7_core_server.http_server.ALLOWED_EMAILS", {"allowed@example.com"}), \
-             patch("cin7_core_server.http_server.SCALEKIT_INTERCEPTOR_SECRET", "test_secret_123"), \
-             patch("cin7_core_server.http_server.scalekit_client", mock_client):
+        with patch("cin7_core_server.server_http.SCALEKIT_ENVIRONMENT_URL", "https://test.scalekit.com"), \
+             patch("cin7_core_server.server_http.SCALEKIT_CLIENT_ID", "test_client_id"), \
+             patch("cin7_core_server.server_http.SCALEKIT_CLIENT_SECRET", "test_client_secret"), \
+             patch("cin7_core_server.server_http.SCALEKIT_RESOURCE_ID", "res_test"), \
+             patch("cin7_core_server.server_http.SERVER_URL", "https://test.example.com"), \
+             patch("cin7_core_server.server_http.ALLOWED_EMAILS", {"allowed@example.com"}), \
+             patch("cin7_core_server.server_http.SCALEKIT_INTERCEPTOR_SECRET", "test_secret_123"), \
+             patch("cin7_core_server.server_http.scalekit_client", mock_client):
 
-            from cin7_core_server.http_server import app
+            from cin7_core_server.server_http import app
             client = TestClient(app)
             payload = {
                 "interceptor_context": {
@@ -321,15 +321,15 @@ class TestEmptyAllowlist:
 
     def test_allows_any_email_when_no_allowlist(self):
         """Should allow any email when ALLOWED_EMAILS is empty."""
-        with patch("cin7_core_server.http_server.SCALEKIT_ENVIRONMENT_URL", "https://test.scalekit.com"), \
-             patch("cin7_core_server.http_server.SCALEKIT_CLIENT_ID", "test_client_id"), \
-             patch("cin7_core_server.http_server.SCALEKIT_CLIENT_SECRET", "test_client_secret"), \
-             patch("cin7_core_server.http_server.SCALEKIT_RESOURCE_ID", "res_test"), \
-             patch("cin7_core_server.http_server.SERVER_URL", "https://test.example.com"), \
-             patch("cin7_core_server.http_server.ALLOWED_EMAILS", set()), \
-             patch("cin7_core_server.http_server.SCALEKIT_INTERCEPTOR_SECRET", None):
+        with patch("cin7_core_server.server_http.SCALEKIT_ENVIRONMENT_URL", "https://test.scalekit.com"), \
+             patch("cin7_core_server.server_http.SCALEKIT_CLIENT_ID", "test_client_id"), \
+             patch("cin7_core_server.server_http.SCALEKIT_CLIENT_SECRET", "test_client_secret"), \
+             patch("cin7_core_server.server_http.SCALEKIT_RESOURCE_ID", "res_test"), \
+             patch("cin7_core_server.server_http.SERVER_URL", "https://test.example.com"), \
+             patch("cin7_core_server.server_http.ALLOWED_EMAILS", set()), \
+             patch("cin7_core_server.server_http.SCALEKIT_INTERCEPTOR_SECRET", None):
 
-            from cin7_core_server.http_server import app
+            from cin7_core_server.server_http import app
             client = TestClient(app)
             payload = {
                 "interceptor_context": {

@@ -26,7 +26,14 @@ def create_mcp_server(auth=None):
     Args:
         auth: Optional auth provider (e.g., ScalekitProvider) for OAuth
     """
-    mcp = FastMCP("mcp-cin7-core", auth=auth)
+    mcp = FastMCP(
+        name="Cin7 Core MCP Server",
+        instructions=(
+            "MCP server providing access to Cin7 Core (DEAR) inventory management API. "
+            "Supports products, suppliers, sales, purchase orders, and stock management."
+        ),
+        auth=auth,
+    )
 
     # -- Tools: auth --------------------------------------------------------
     mcp.tool()(auth_tools.cin7_status)

@@ -27,7 +27,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-logger = logging.getLogger("cin7_core_server.http_server")
+logger = logging.getLogger("cin7_core_server.server_http")
 
 # ScaleKit Configuration
 SCALEKIT_ENVIRONMENT_URL = os.getenv("SCALEKIT_ENVIRONMENT_URL")

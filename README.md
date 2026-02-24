@@ -65,7 +65,7 @@ This mode runs the server as a web service with OAuth 2.0 authentication via [Sc
 
 **Running the server:**
 ```bash
-uv run python -m cin7_core_server.http_server
+uv run python -m cin7_core_server.server_http
 ```
 
 **Endpoints:**
@@ -105,7 +105,7 @@ Add this to your `claude_desktop_config.json`:
         "run",
         "python",
         "-m",
-        "cin7_core_server.stdio_server"
+        "cin7_core_server.server_stdio"
       ],
       "env": {
         "CIN7_ACCOUNT_ID": "your-account-id",
@@ -126,14 +126,14 @@ uv venv
 uv pip install -e .
 
 # Quick import check
-uv run python -c "import cin7_core_server.mcp_server; print('OK')"
+uv run python -c "import cin7_core_server.server; print('OK')"
 ```
 
 ### Testing with MCP Inspector
 
 ```bash
 # Start the HTTP server
-uv run python -m cin7_core_server.http_server
+uv run python -m cin7_core_server.server_http
 
 # In another terminal, open MCP Inspector
 npx @modelcontextprotocol/inspector http://localhost:8000/mcp
@@ -216,9 +216,9 @@ No endpoint should be merged without corresponding test coverage. See [CLAUDE.md
 ### Architecture
 
 - **`cin7_client.py`** - Async HTTP client for Cin7 Core API
-- **`mcp_server.py`** - FastMCP server with tools, resources, and prompts
-- **`http_server.py`** - FastAPI wrapper with MCP Streamable HTTP transport and OAuth
-- **`stdio_server.py`** - Stdio transport for local Claude Desktop integration
+- **`server.py`** - FastMCP server with tools, resources, and prompts
+- **`server_http.py`** - Starlette wrapper with MCP Streamable HTTP transport and ScaleKit OAuth
+- **`server_stdio.py`** - Stdio transport for local Claude Desktop integration
 
 See [CLAUDE.md](CLAUDE.md) for comprehensive development documentation, test patterns, and architecture details.
 

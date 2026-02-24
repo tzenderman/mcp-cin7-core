@@ -98,7 +98,7 @@ tests/
   test_mcp_resources.py        # MCP resource handler tests
   test_mcp_prompts.py          # MCP prompt function tests
   test_mcp_snapshots.py        # Product + stock snapshot lifecycle tests
-  test_http_server.py          # HTTP server endpoint tests
+  test_http_server.py          # HTTP server (server_http.py) endpoint tests
 ```
 
 ### Test-Driven Development Workflow
@@ -313,7 +313,7 @@ To add new fixtures: create constants in the appropriate module following the ex
 - `projection.py` - Field projection helpers (`project_items`, `project_stock_items`)
 - `logging.py` - Logging setup and `truncate` helper
 
-**`cin7_core_server/http_server.py`** - FastAPI HTTP wrapper for MCP Streamable HTTP transport
+**`cin7_core_server/server_http.py`** - Starlette HTTP wrapper for MCP Streamable HTTP transport
 - Mounts the FastMCP server at `/mcp` endpoint
 - Provides Bearer token authentication middleware
 - Health check endpoint at `/health`

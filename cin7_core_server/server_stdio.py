@@ -4,7 +4,7 @@ This module provides a minimal wrapper around the existing FastMCP server
 to enable stdio transport for local development with Claude Desktop.
 
 Usage:
-    python -m cin7_core_server.stdio_server
+    python -m cin7_core_server.server_stdio
 
 Environment Variables (required):
     CIN7_ACCOUNT_ID - Cin7 Core account identifier
