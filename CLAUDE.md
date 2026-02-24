@@ -105,23 +105,53 @@ tests/
 
 When adding a new Cin7 API endpoint, follow this order:
 
-1. **Add mock data** to `tests/fixtures/` for the new endpoint's API responses
-2. **Write client tests** in `test_cin7_client.py`:
-   - Mock `_request` (`mock_client._request = AsyncMock(return_value=mock_resp)`)
-   - Verify correct URL, params, and payload sent
+1. **Read the API docs** at https://dearinventory.docs.apiary.io/ for the endpoint:
+   - Exact HTTP method (`GET`, `POST`, `PUT`)
+   - Exact API path string (e.g., `saleList` not `SaleList`, `product-suppliers` not `ProductSuppliers`)
+   - Every query parameter name exactly as shown (e.g., `Sku` not `SKU`, `ID` not `ProductID`)
+   - Default values for pagination params (typically `Page=1`, `Limit=100`)
+   - Required fields for request bodies
+2. **Add mock data** to `tests/fixtures/` for the new endpoint's API responses
+3. **Write request parameter contract tests** in `TestApiRequestContracts` in `test_cin7_client.py` (these will fail until step 6):
+   - Assert the exact HTTP method
+   - Assert the exact API path string — pulled directly from the API docs URL
+   - Assert each query parameter name and type — pulled directly from the API docs parameter list
+   - Assert default values (Page, Limit) match the API docs defaults
+   - Assert wrong/legacy param names are NOT sent (e.g., `assert "SKU" not in params`)
+4. **Write client response/error tests** in `test_cin7_client.py`:
    - Verify response parsing and error handling
-3. **Write MCP tool tests** in `test_mcp_server.py`:
+5. **Write MCP tool tests** in `test_mcp_server.py`:
    - Mock the client layer (`mock_instance.method = AsyncMock(...)`)
    - Verify correct client method called with right args
    - Verify field projection applied (if applicable)
-4. **Implement the client method** in `cin7_client.py`
-5. **Implement the MCP tool** in the appropriate `resources/*.py` module
-6. **Run `uv run pytest`** to verify all tests pass
-7. **Add resource/prompt tests** if the endpoint has templates or workflow guides
+6. **Implement the client method** in `cin7_client.py` — tests from step 3 now pass
+7. **Implement the MCP tool** in the appropriate `resources/*.py` module
+8. **Run `uv run pytest`** to verify all tests pass
+9. **Add resource/prompt tests** if the endpoint has templates or workflow guides
 
 ### Test Patterns
 
-**Client test** (mock `_request`, verify params/responses/errors):
+**Request parameter contract test** (assert exact method, path, param names from API docs):
+```python
+# In TestApiRequestContracts in test_cin7_client.py
+async def test_list_products_sku_filter_uses_sku_not_uppercase(self, mock_client):
+    """API docs: GET /Product?Sku=... — param is 'Sku' (not 'SKU').
+
+    See: https://dearinventory.docs.apiary.io/#reference/product/product/get
+    """
+    mock_client._request = AsyncMock(return_value=self._ok_resp(PRODUCT_LIST_RESPONSE))
+
+    await mock_client.list_products(sku="TEST-001")
+
+    call = mock_client._request.call_args
+    assert call[0][0] == "get"
+    assert call[0][1] == "Product"
+    params = call.kwargs.get("params", {})
+    assert "Sku" in params, "API param is 'Sku' (not 'SKU')"
+    assert "SKU" not in params
+```
+
+**Client response/filter test** (mock `_request`, verify params/responses/errors):
 ```python
 async def test_list_products_with_name_filter(self, mock_client):
     mock_resp = MagicMock()
@@ -154,7 +184,59 @@ async def test_cin7_products_default_projection(self, mock_cin7_class):
 
 ### Contract Tests (API Shape Documentation)
 
-Create endpoints have **contract tests** in `tests/test_mcp_server.py` that document the expected request body shape per the Cin7 Core API docs. These tests:
+Every client method must have contract tests that verify the exact API request it sends. There are two kinds, both derived directly from the API docs at https://dearinventory.docs.apiary.io/:
+
+---
+
+#### 1. Request Parameter Contract Tests (`TestApiRequestContracts` in `test_cin7_client.py`)
+
+Every GET/list/get-single method must have tests in `TestApiRequestContracts` that assert:
+
+- **HTTP method** — `call[0][0] == "get"`
+- **Exact API path** — pulled from the API docs URL (e.g., `"saleList"` not `"SaleList"`, `"product-suppliers"` not `"ProductSuppliers"`)
+- **Exact query parameter names** — pulled from the API docs parameter list (e.g., `"Sku"` not `"SKU"`, `"ID"` not `"ProductID"`)
+- **Default pagination values** — `Page=1`, `Limit=100` where the API docs show these defaults
+- **Absence of wrong names** — `assert "SKU" not in params` when the correct name is `"Sku"`
+
+Each test must reference the API docs URL in its docstring. Example:
+
+```python
+async def test_list_sales_path_is_salelist_lowercase_l(self, mock_client):
+    """API docs: GET /saleList (lowercase 'l') — not 'SaleList'.
+
+    See: https://dearinventory.docs.apiary.io/#reference/sale/salelist/get
+    """
+    mock_client._request = AsyncMock(return_value=self._ok_resp(SALE_LIST_RESPONSE))
+    await mock_client.list_sales()
+    call = mock_client._request.call_args
+    assert call[0][0] == "get"
+    assert call[0][1] == "saleList", "API path is 'saleList' (lowercase 'l'), not 'SaleList'"
+```
+
+**Confirmed API paths and parameter names (from API docs):**
+
+| Client method | HTTP | Path | Key params |
+|---|---|---|---|
+| `get_me` | GET | `me` | — |
+| `list_products` | GET | `Product` | `Page`, `Limit`, `Sku` (not `SKU`), `Name` |
+| `get_product` | GET | `Product` | `ID`, `Sku` (not `SKU`) |
+| `list_suppliers` | GET | `Supplier` | `Page`, `Limit`, `ID`, `Name` |
+| `get_supplier` | GET | `Supplier` | `ID`, `Name` |
+| `list_sales` | GET | `saleList` | `Page`, `Limit`, `Search` |
+| `get_sale` | GET | `Sale` | `ID` |
+| `list_purchase_orders` | GET | `purchaseList` | `Page`, `Limit`, `Search` |
+| `get_purchase_order` | GET | `Purchase` | `ID` |
+| `list_stock_transfers` | GET | `stockTransferList` | `Page`, `Limit`, `Status`, `Search` |
+| `get_stock_transfer` | GET | `stockTransfer` | `TaskID` |
+| `list_product_availability` | GET | `ref/productavailability` | `Page`, `Limit`, `ID`, `Sku`, `Location`, `Batch`, `Category` |
+| `get_product_suppliers` | GET | `product-suppliers` | `ProductID` |
+| `update_product_suppliers` | PUT | `product-suppliers` | — |
+
+---
+
+#### 2. Request Body Contract Tests (`test_mcp_server.py`)
+
+Create endpoints have **contract tests** in `tests/test_mcp_server.py` that document the expected request body shape. These tests:
 
 - Use **complete, API-accurate payloads** matching the [Cin7 Core API Blueprint](https://dearinventory.docs.apiary.io/api-description-document)
 - Assert the payload is forwarded unchanged to the Cin7 client (`assert_called_once_with(payload)`)
@@ -166,8 +248,8 @@ Create endpoints have **contract tests** in `tests/test_mcp_server.py` that docu
 |---|---|
 | `cin7_create_product` | `SKU`, `Name`, `Category`, `Type`, `CostingMethod`, `UOM`, `Status` |
 | `cin7_create_supplier` | `Name`, `Currency`, `PaymentTerm`, `AccountPayable`, `TaxRule` |
-| `cin7_create_sale` | `Customer` (or `CustomerID`), `Location` |
-| `cin7_create_purchase_order` | `Supplier` (or `SupplierID`), `Location` (no strict API requirements) |
+| `cin7_create_sale` | `Customer` (or `CustomerID`), `Location`, `Status`, `SkipQuote` |
+| `cin7_create_purchase_order` | `Supplier` (or `SupplierID`), `Location`, `Status`, `OrderDate` |
 
 **Line item shape** (for `Lines` array in Sale and Purchase Order):
 
