@@ -1,0 +1,8 @@
+*.pyc
+.venv/
+.env
+*.egg-info
+.worktrees/
+.DS_Store
+render.yaml
+docs/
