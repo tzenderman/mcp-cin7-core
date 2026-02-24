@@ -65,7 +65,7 @@ This mode runs the server as a web service with OAuth 2.0 authentication via [Sc
 
 **Running the server:**
 ```bash
-uv run uvicorn cin7_core_server.http_server:app --host 0.0.0.0 --port 8000
+uv run python -m cin7_core_server.http_server
 ```
 
 **Endpoints:**
@@ -133,7 +133,7 @@ uv run python -c "import cin7_core_server.mcp_server; print('OK')"
 
 ```bash
 # Start the HTTP server
-uv run uvicorn cin7_core_server.http_server:app --host 0.0.0.0 --port 8000
+uv run python -m cin7_core_server.http_server
 
 # In another terminal, open MCP Inspector
 npx @modelcontextprotocol/inspector http://localhost:8000/mcp
