@@ -364,10 +364,10 @@ class TestCin7CreateProduct:
         mock_instance.save_product.assert_called_once_with(
             {"SKU": "NEWPROD-001", "Name": "New Product", "Category": "Test"}
         )
-        # update_product_suppliers should be called with product ID from response
-        # API docs: PUT /product-suppliers requires "ProductSuppliers" key (not "Suppliers")
+        # update_product_suppliers called with flat list — ProductID injected into each item
+        # API docs: PUT /product-suppliers body is {"ProductSuppliers": [flat associations]}
         mock_instance.update_product_suppliers.assert_called_once_with(
-            [{"ProductID": "prod-new-789", "ProductSuppliers": suppliers}]
+            [{**suppliers[0], "ProductID": "prod-new-789"}]
         )
         assert result["_suppliersRegistered"] is True
         assert result["_supplierCount"] == 1
@@ -478,10 +478,10 @@ class TestCin7UpdateProduct:
         mock_instance.update_product.assert_called_once_with(
             {"ID": "prod-abc-123", "Name": "Updated Widget"}
         )
-        # update_product_suppliers uses the ID from the payload
-        # API docs: PUT /product-suppliers requires "ProductSuppliers" key (not "Suppliers")
+        # update_product_suppliers called with flat list — ProductID injected into each item
+        # API docs: PUT /product-suppliers body is {"ProductSuppliers": [flat associations]}
         mock_instance.update_product_suppliers.assert_called_once_with(
-            [{"ProductID": "prod-abc-123", "ProductSuppliers": suppliers}]
+            [{**suppliers[0], "ProductID": "prod-abc-123"}]
         )
         assert result["_suppliersUpdated"] is True
         assert result["_supplierCount"] == 1

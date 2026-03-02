@@ -658,10 +658,17 @@ class Cin7Client:
 
     async def update_product_suppliers(
         self,
-        products: list[Dict[str, Any]],
+        supplier_associations: list[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """Update suppliers for one or more products via PUT ProductSuppliers."""
-        payload = {"Products": products}
+        """Update product-supplier associations via PUT product-suppliers.
+
+        API docs: PUT /product-suppliers
+        Body: {"ProductSuppliers": [flat list of associations]}
+        Each association must contain ProductID + SupplierID (and optional cost/SKU fields).
+
+        See: https://dearinventory.docs.apiary.io/#reference/reference-books/product-suppliers/put
+        """
+        payload = {"ProductSuppliers": supplier_associations}
         response = await self._request("put", "product-suppliers", json=payload)
         try:
             data = response.json()

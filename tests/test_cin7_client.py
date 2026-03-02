@@ -1008,21 +1008,21 @@ class TestUpdateProductSuppliers:
         mock_resp.headers = {}
         mock_client._request = AsyncMock(return_value=mock_resp)
 
-        products = [
+        # API docs: PUT /product-suppliers expects a flat list of associations,
+        # each with both ProductID and SupplierID, wrapped in {"ProductSuppliers": [...]}
+        supplier_associations = [
             {
                 "ProductID": "prod-abc-123",
-                "Suppliers": [
-                    {"SupplierID": "sup-222", "SupplierName": "New Supplier", "Cost": 10.00}
-                ],
+                "SupplierID": "sup-222",
+                "SupplierName": "New Supplier",
+                "Cost": 10.00,
             }
         ]
-        result = await mock_client.update_product_suppliers(products)
+        result = await mock_client.update_product_suppliers(supplier_associations)
 
-        assert "Products" in result
-        assert result["Products"][0]["Suppliers"][0]["SupplierName"] == "New Supplier"
         call_args = mock_client._request.call_args
         sent_payload = call_args.kwargs.get("json", call_args[1].get("json", {}))
-        assert sent_payload == {"Products": products}
+        assert sent_payload == {"ProductSuppliers": supplier_associations}
 
     async def test_api_error_raises(self, mock_client):
         """Should raise Cin7ClientError on API error."""

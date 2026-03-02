@@ -111,13 +111,15 @@ async def cin7_create_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     If a Suppliers array is provided, it will be automatically registered via
     the ProductSuppliers endpoint after product creation.
 
-    Supplier object fields (use EXACTLY these names — wrong names are silently ignored by the API):
+    Supplier object fields (confirmed from API docs — wrong names silently ignored):
     - SupplierID (string, required) — GUID from cin7_get_supplier
     - SupplierName (string) — NOT "Name"
-    - SupplierInventoryCode (string) — supplier's SKU for this product; NOT "SupplierSKU" or "SKU"
+    - SupplierInventoryCode (string) — supplier's code for this product; NOT "SupplierSKU"
     - Cost (decimal) — unit cost; NOT "Price"
     - Currency (string, e.g. "AUD", "EUR")
-    - MinimumOrderQuantity (decimal)
+    - FixedCost (decimal, optional)
+    - DropShip (boolean, optional)
+    - SupplierProductName (string, optional) — supplier's own name for this product
 
     Example workflow:
     1. Always call cin7_product_template() first to get the complete structure
@@ -149,10 +151,8 @@ async def cin7_create_product(payload: Dict[str, Any]) -> Dict[str, Any]:
         if product_id:
             logger.debug("Registering %d suppliers for product %s", len(suppliers), product_id)
             try:
-                supplier_result = await client.update_product_suppliers([{
-                    "ProductID": product_id,
-                    "ProductSuppliers": suppliers
-                }])
+                flat = [{**s, "ProductID": product_id} for s in suppliers]
+                supplier_result = await client.update_product_suppliers(flat)
                 logger.debug("Suppliers registered: %s", truncate(str(supplier_result)))
                 result["_suppliersRegistered"] = True
                 result["_supplierCount"] = len(suppliers)
@@ -181,13 +181,15 @@ async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     IMPORTANT: When updating suppliers, you must provide the FULL list of suppliers.
     Any suppliers not included in the array will be disassociated from the product.
 
-    Supplier object fields (use EXACTLY these names — wrong names are silently ignored by the API):
+    Supplier object fields (confirmed from API docs — wrong names silently ignored):
     - SupplierID (string, required) — GUID from cin7_get_supplier
     - SupplierName (string) — NOT "Name"
-    - SupplierInventoryCode (string) — supplier's SKU for this product; NOT "SupplierSKU" or "SKU"
+    - SupplierInventoryCode (string) — supplier's code for this product; NOT "SupplierSKU"
     - Cost (decimal) — unit cost; NOT "Price"
     - Currency (string, e.g. "AUD", "EUR")
-    - MinimumOrderQuantity (decimal)
+    - FixedCost (decimal, optional)
+    - DropShip (boolean, optional)
+    - SupplierProductName (string, optional) — supplier's own name for this product
 
     Docs: https://dearinventory.docs.apiary.io/#reference/product
     """
@@ -214,10 +216,8 @@ async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
         if product_id:
             logger.debug("Updating %d suppliers for product %s", len(suppliers), product_id)
             try:
-                supplier_result = await client.update_product_suppliers([{
-                    "ProductID": product_id,
-                    "ProductSuppliers": suppliers
-                }])
+                flat = [{**s, "ProductID": product_id} for s in suppliers]
+                supplier_result = await client.update_product_suppliers(flat)
                 logger.debug("Suppliers updated: %s", truncate(str(supplier_result)))
                 result["_suppliersUpdated"] = True
                 result["_supplierCount"] = len(suppliers)
