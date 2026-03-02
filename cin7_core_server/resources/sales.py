@@ -32,7 +32,9 @@ async def cin7_sales(
     - limit: Items per page (Cin7 limits apply)
     - cursor: Opaque cursor for next page (pass from previous response)
     - search: Optional search term
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: Order, SaleOrderNumber, Customer, Location, Status, OrderDate,
         InvoiceDate, Total, Tax, TotalPaid
@@ -89,7 +91,9 @@ async def cin7_get_sale(
     - combine_additional_charges: Combine additional charges into line totals
     - hide_inventory_movements: Exclude inventory movement details from response
     - include_transactions: Include financial transaction details
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: ID, Order, Customer, Location, Status, Quote, Order, Fulfilments,
         Invoices, CreditNotes, InventoryMovements, Transactions

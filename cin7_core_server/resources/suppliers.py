@@ -24,7 +24,9 @@ async def cin7_suppliers(
     - limit: Items per page (Cin7 limits apply)
     - cursor: Opaque cursor for next page (pass from previous response)
     - name: Optional name filter
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: ID, Name, ContactPerson, Phone, Email, Currency, TaxRule, PaymentTerm
         Default returns: ID, Name
@@ -67,7 +69,9 @@ async def cin7_get_supplier(
     Parameters:
     - supplier_id: Supplier GUID
     - name: Supplier name
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: ID, Name, ContactPerson, Phone, Email, Currency, TaxRule, PaymentTerm
         Default returns: ID, Name

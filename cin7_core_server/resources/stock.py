@@ -27,7 +27,9 @@ async def cin7_stock_levels(
     - limit: Items per page (max 1000)
     - cursor: Opaque cursor for next page (pass from previous response)
     - location: Filter by location name
-    - fields: Additional fields beyond defaults, or ["*"] for all
+    - fields: Additional fields beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: SKU, Location, OnHand, Available, Allocated, OnOrder,
         InTransit, NextDeliveryDate, Bin, Batch, Barcode
@@ -70,7 +72,9 @@ async def cin7_get_stock(
     Parameters:
     - sku: Product SKU (preferred)
     - product_id: Product GUID
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: sku, product_id, locations, total_on_hand, total_available
         Default returns: sku, total_on_hand, total_available
@@ -121,7 +125,9 @@ async def cin7_stock_transfers(
     - limit: Items per page (Cin7 limits apply)
     - cursor: Opaque cursor for next page (pass from previous response)
     - search: Optional search term
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: TaskID, FromLocation, ToLocation, Status, TransferDate, Lines
         Default returns: TaskID, FromLocation, ToLocation, Status, TransferDate
@@ -164,7 +170,9 @@ async def cin7_get_stock_transfer(
 
     Parameters:
     - stock_transfer_id: Stock transfer task ID (required)
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: TaskID, FromLocation, ToLocation, Status, TransferDate, Lines
         Default returns: TaskID, FromLocation, ToLocation

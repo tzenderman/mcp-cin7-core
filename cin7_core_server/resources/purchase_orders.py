@@ -27,7 +27,9 @@ async def cin7_purchase_orders(
     - limit: Items per page (Cin7 limits apply)
     - cursor: Opaque cursor for next page (pass from previous response)
     - search: Optional search term
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: TaskID, Supplier, Status, OrderDate, Location, Order,
         RequiredBy, InvoiceDate, Total, Tax
@@ -71,7 +73,9 @@ async def cin7_get_purchase_order(
 
     Parameters:
     - purchase_order_id: Purchase order task ID (required)
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: ID, TaskID, Supplier, Location, Status, OrderDate, Order,
         RequiredBy, Lines, AdditionalCharges, Invoices
@@ -99,6 +103,7 @@ async def cin7_create_purchase_order(payload: Dict[str, Any]) -> Dict[str, Any]:
     and their expected formats.
 
     Required PO-level fields — the API will reject the request if any are missing:
+    - Approach ("Invoice" for invoice-first, "Stock" for stock-first — REQUIRED)
     - Supplier or SupplierID (supplier name or UUID)
     - Location (warehouse location name)
     - Status (PO status: "DRAFT" or "AUTHORISED")

@@ -26,7 +26,9 @@ async def cin7_products(
     - cursor: Opaque cursor for next page (pass from previous response)
     - name: Optional name filter
     - sku: Optional SKU filter
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: ID, SKU, Name, Category, Brand, Status, Type, UOM,
         CostingMethod, DefaultLocation, PriceTier1, PurchasePrice, Barcode
@@ -68,7 +70,9 @@ async def cin7_get_product(
     Parameters:
     - product_id: Product GUID
     - sku: Product SKU
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Available fields: ID, SKU, Name, Category, Brand, Status, Type, UOM,
         CostingMethod, DefaultLocation, PriceTier1, PurchasePrice, Barcode
@@ -107,6 +111,14 @@ async def cin7_create_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     If a Suppliers array is provided, it will be automatically registered via
     the ProductSuppliers endpoint after product creation.
 
+    Supplier object fields (use EXACTLY these names — wrong names are silently ignored by the API):
+    - SupplierID (string, required) — GUID from cin7_get_supplier
+    - SupplierName (string) — NOT "Name"
+    - SupplierInventoryCode (string) — supplier's SKU for this product; NOT "SupplierSKU" or "SKU"
+    - Cost (decimal) — unit cost; NOT "Price"
+    - Currency (string, e.g. "AUD", "EUR")
+    - MinimumOrderQuantity (decimal)
+
     Example workflow:
     1. Always call cin7_product_template() first to get the complete structure
     2. Fill in all required fields listed above
@@ -139,7 +151,7 @@ async def cin7_create_product(payload: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 supplier_result = await client.update_product_suppliers([{
                     "ProductID": product_id,
-                    "Suppliers": suppliers
+                    "ProductSuppliers": suppliers
                 }])
                 logger.debug("Suppliers registered: %s", truncate(str(supplier_result)))
                 result["_suppliersRegistered"] = True
@@ -169,6 +181,14 @@ async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     IMPORTANT: When updating suppliers, you must provide the FULL list of suppliers.
     Any suppliers not included in the array will be disassociated from the product.
 
+    Supplier object fields (use EXACTLY these names — wrong names are silently ignored by the API):
+    - SupplierID (string, required) — GUID from cin7_get_supplier
+    - SupplierName (string) — NOT "Name"
+    - SupplierInventoryCode (string) — supplier's SKU for this product; NOT "SupplierSKU" or "SKU"
+    - Cost (decimal) — unit cost; NOT "Price"
+    - Currency (string, e.g. "AUD", "EUR")
+    - MinimumOrderQuantity (decimal)
+
     Docs: https://dearinventory.docs.apiary.io/#reference/product
     """
     logger.debug("Tool call: cin7_update_product(payload=%s)", truncate(str(payload)))
@@ -196,7 +216,7 @@ async def cin7_update_product(payload: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 supplier_result = await client.update_product_suppliers([{
                     "ProductID": product_id,
-                    "Suppliers": suppliers
+                    "ProductSuppliers": suppliers
                 }])
                 logger.debug("Suppliers updated: %s", truncate(str(supplier_result)))
                 result["_suppliersUpdated"] = True

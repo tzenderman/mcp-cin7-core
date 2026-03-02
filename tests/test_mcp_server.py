@@ -365,8 +365,9 @@ class TestCin7CreateProduct:
             {"SKU": "NEWPROD-001", "Name": "New Product", "Category": "Test"}
         )
         # update_product_suppliers should be called with product ID from response
+        # API docs: PUT /product-suppliers requires "ProductSuppliers" key (not "Suppliers")
         mock_instance.update_product_suppliers.assert_called_once_with(
-            [{"ProductID": "prod-new-789", "Suppliers": suppliers}]
+            [{"ProductID": "prod-new-789", "ProductSuppliers": suppliers}]
         )
         assert result["_suppliersRegistered"] is True
         assert result["_supplierCount"] == 1
@@ -478,8 +479,9 @@ class TestCin7UpdateProduct:
             {"ID": "prod-abc-123", "Name": "Updated Widget"}
         )
         # update_product_suppliers uses the ID from the payload
+        # API docs: PUT /product-suppliers requires "ProductSuppliers" key (not "Suppliers")
         mock_instance.update_product_suppliers.assert_called_once_with(
-            [{"ProductID": "prod-abc-123", "Suppliers": suppliers}]
+            [{"ProductID": "prod-abc-123", "ProductSuppliers": suppliers}]
         )
         assert result["_suppliersUpdated"] is True
         assert result["_supplierCount"] == 1
@@ -1137,11 +1139,14 @@ class TestCin7CreatePurchaseOrder:
 
     @pytest.mark.asyncio
     async def test_create_purchase_order_minimal_api_contract(self, mock_cin7_class):
-        """Contract test: minimal practical fields for POST /Purchase.
+        """Contract test: required fields for POST /Purchase.
 
-        The Cin7 API has no strictly required fields for POST /Purchase, but in
-        practice you need Supplier (or SupplierID) and Location to create a
-        meaningful purchase order.
+        Required fields (API rejects request if missing):
+        - Approach: "Invoice" (invoice-first) or "Stock" (stock-first)
+        - Supplier or SupplierID
+        - Location
+        - Status
+        - OrderDate
 
         API docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase
         """
@@ -1156,8 +1161,11 @@ class TestCin7CreatePurchaseOrder:
         from cin7_core_server.resources.purchase_orders import cin7_create_purchase_order
 
         payload = {
+            "Approach": "Invoice",
             "Supplier": "Acme Supplies",
             "Location": "Main Warehouse",
+            "Status": "DRAFT",
+            "OrderDate": "2026-02-27",
         }
         result = await cin7_create_purchase_order(payload)
 
@@ -1194,8 +1202,10 @@ class TestCin7CreatePurchaseOrder:
         from cin7_core_server.resources.purchase_orders import cin7_create_purchase_order
 
         payload = {
+            "Approach": "Invoice",
             "Supplier": "Acme Supplies",
             "Location": "Main Warehouse",
+            "Status": "DRAFT",
             "OrderDate": "2026-02-17T00:00:00",
             "Lines": [
                 {

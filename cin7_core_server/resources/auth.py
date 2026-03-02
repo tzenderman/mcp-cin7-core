@@ -25,7 +25,9 @@ async def cin7_me(fields: list[str] | None = None) -> Dict[str, Any]:
     """Call Cin7 Core Me endpoint to verify identity and account context.
 
     Parameters:
-    - fields: Additional fields to include beyond defaults, or ["*"] for all
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
 
     Default returns: Company, Currency, DefaultLocation
     """
