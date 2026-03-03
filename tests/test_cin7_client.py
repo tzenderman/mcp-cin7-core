@@ -1384,6 +1384,7 @@ class TestUpdateSale:
         header_response = MagicMock()
         header_response.status_code = 200
         header_response.text = '{"ID": "sale-abc-123", "SaleID": "sale-abc-123"}'
+        header_response.headers = {}
         header_response.json.return_value = {
             "ID": "sale-abc-123",
             "SaleID": "sale-abc-123",
@@ -1393,7 +1394,8 @@ class TestUpdateSale:
 
         order_response = MagicMock()
         order_response.status_code = 200
-        order_response.text = '{"SaleID": "sale-abc-123", "Lines": [...]}'
+        order_response.text = '{"SaleID": "sale-abc-123", "Lines": []}'
+        order_response.headers = {}
         order_response.json.return_value = {
             "SaleID": "sale-abc-123",
             "Status": "DRAFT",
@@ -1471,11 +1473,13 @@ class TestUpdateSale:
         header_response = MagicMock()
         header_response.status_code = 200
         header_response.text = '{"ID": "sale-abc-123", "SaleID": "sale-abc-123"}'
+        header_response.headers = {}
         header_response.json.return_value = {"ID": "sale-abc-123", "SaleID": "sale-abc-123"}
 
         lines_error_response = MagicMock()
         lines_error_response.status_code = 400
         lines_error_response.text = "Invalid line data"
+        lines_error_response.headers = {}
         lines_error_response.json.return_value = {"error": "Invalid line data"}
 
         mock_client._request = AsyncMock(
