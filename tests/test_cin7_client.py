@@ -1379,6 +1379,116 @@ class TestUpdateSale:
         with pytest.raises(Cin7ClientError, match="Sale update error"):
             await mock_client.update_sale(payload)
 
+    async def test_updates_sale_with_lines_two_step(self, mock_client):
+        """Should update sale header then replace order lines in two API calls."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "sale-abc-123", "SaleID": "sale-abc-123"}'
+        header_response.json.return_value = {
+            "ID": "sale-abc-123",
+            "SaleID": "sale-abc-123",
+            "Customer": "Updated Customer",
+            "Status": "DRAFT",
+        }
+
+        order_response = MagicMock()
+        order_response.status_code = 200
+        order_response.text = '{"SaleID": "sale-abc-123", "Lines": [...]}'
+        order_response.json.return_value = {
+            "SaleID": "sale-abc-123",
+            "Status": "DRAFT",
+            "Lines": [{"ProductID": "prod-123", "SKU": "WIDGET-001", "Quantity": 5}],
+        }
+
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
+
+        payload = {
+            "SaleID": "sale-abc-123",
+            "Customer": "Updated Customer",
+            "Lines": [
+                {
+                    "ProductID": "prod-123",
+                    "SKU": "WIDGET-001",
+                    "Name": "Blue Widget",
+                    "Quantity": 5,
+                    "Price": 29.99,
+                    "Tax": 0,
+                    "TaxRule": "Tax Exempt",
+                    "Total": 149.95,
+                }
+            ],
+        }
+        result = await mock_client.update_sale(payload)
+
+        assert mock_client._request.call_count == 2
+
+        # First call: PUT /Sale (no Lines)
+        first_call = mock_client._request.call_args_list[0]
+        assert first_call[0][0] == "put"
+        assert first_call[0][1] == "Sale"
+        first_body = first_call.kwargs.get("json", first_call[1].get("json", {}))
+        assert "Lines" not in first_body
+
+        # Second call: PUT /sale/order with SaleID and Lines
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][0] == "put"
+        assert second_call[0][1] == "sale/order"
+        second_body = second_call.kwargs.get("json", second_call[1].get("json", {}))
+        assert second_body.get("SaleID") == "sale-abc-123"
+        assert "Lines" in second_body
+        assert len(second_body["Lines"]) == 1
+
+        assert "Order" in result
+
+    async def test_updates_sale_header_only_when_no_lines(self, mock_client):
+        """Should make only one API call when Lines is absent."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"SaleID": "abc-123"}'
+        mock_response.json.return_value = {"SaleID": "abc-123", "Customer": "Test"}
+        mock_response.headers = {}
+        mock_client._request = AsyncMock(return_value=mock_response)
+
+        await mock_client.update_sale({"SaleID": "abc-123", "Customer": "Test"})
+
+        assert mock_client._request.call_count == 1
+
+    async def test_updates_sale_skips_lines_call_for_empty_list(self, mock_client):
+        """Empty Lines list should not trigger the lines PUT call."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"SaleID": "abc-123"}'
+        mock_response.json.return_value = {"SaleID": "abc-123"}
+        mock_response.headers = {}
+        mock_client._request = AsyncMock(return_value=mock_response)
+
+        await mock_client.update_sale({"SaleID": "abc-123", "Lines": []})
+
+        assert mock_client._request.call_count == 1
+
+    async def test_raises_on_lines_update_error_with_sale_id(self, mock_client):
+        """Should raise Cin7ClientError with SaleID when lines PUT fails."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "sale-abc-123", "SaleID": "sale-abc-123"}'
+        header_response.json.return_value = {"ID": "sale-abc-123", "SaleID": "sale-abc-123"}
+
+        lines_error_response = MagicMock()
+        lines_error_response.status_code = 400
+        lines_error_response.text = "Invalid line data"
+        lines_error_response.json.return_value = {"error": "Invalid line data"}
+
+        mock_client._request = AsyncMock(
+            side_effect=[header_response, lines_error_response]
+        )
+
+        payload = {
+            "SaleID": "sale-abc-123",
+            "Lines": [{"ProductID": "prod-123", "SKU": "X", "Quantity": 1}],
+        }
+        with pytest.raises(Cin7ClientError, match="sale-abc-123"):
+            await mock_client.update_sale(payload)
+
 
 # ---------------------------------------------------------------------------
 # TestSavePurchaseOrder (preserved from existing tests)
