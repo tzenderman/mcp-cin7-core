@@ -480,19 +480,55 @@ class Cin7Client:
         return data if isinstance(data, dict) else {"result": data}
 
     async def update_sale(self, sale: Dict[str, Any]) -> Dict[str, Any]:
-        """Update an existing Sale via PUT Sale."""
-        response = await self._request("put", "Sale", json=sale)
+        """Update an existing Sale via PUT Sale, then optionally replace order lines.
+
+        If 'Lines' is present and non-empty in the payload, a second PUT /sale/order
+        call replaces all existing order lines. An empty Lines list is ignored.
+
+        If the header update succeeds but the lines update fails, raises Cin7ClientError
+        with the SaleID so the caller knows the partial state.
+        """
+        payload = dict(sale)
+        lines = payload.pop("Lines", None) or None  # treat [] as absent
+
+        response = await self._request("put", "Sale", json=payload)
         try:
             data = response.json()
         except Exception:
             data = {"raw": _truncate(response.text or "")}
 
-        if response.status_code in (200, 204):
-            return data if isinstance(data, dict) else {"result": data}
+        if response.status_code not in (200, 204):
+            raise Cin7ClientError(
+                f"Sale update error: {response.status_code} {response.text[:500]}"
+            )
 
-        raise Cin7ClientError(
-            f"Sale update error: {response.status_code} {response.text[:500]}"
-        )
+        result = data if isinstance(data, dict) else {"result": data}
+
+        if lines:
+            sale_id = result.get("ID") or result.get("SaleID") or sale.get("SaleID") or sale.get("ID")
+            order_payload: Dict[str, Any] = {
+                "SaleID": sale_id,
+                "Lines": lines,
+            }
+            if "Status" in payload:
+                order_payload["Status"] = payload["Status"]
+
+            order_response = await self._request("put", "sale/order", json=order_payload)
+            try:
+                order_data = order_response.json()
+            except Exception:
+                order_data = {"raw": _truncate(order_response.text or "")}
+
+            if order_response.status_code not in (200, 204):
+                raise Cin7ClientError(
+                    f"Sale header updated (ID={sale_id}) but order lines update failed: "
+                    f"{order_response.status_code} {order_response.text[:500]}"
+                )
+
+            if isinstance(order_data, dict):
+                result["Order"] = order_data
+
+        return result
 
     async def list_purchase_orders(
         self,
