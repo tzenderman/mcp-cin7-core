@@ -249,7 +249,7 @@ Create endpoints have **contract tests** in `tests/test_mcp_server.py` that docu
 | `cin7_create_product` | `SKU`, `Name`, `Category`, `Type`, `CostingMethod`, `UOM`, `Status` |
 | `cin7_create_supplier` | `Name`, `Currency`, `PaymentTerm`, `AccountPayable`, `TaxRule` |
 | `cin7_create_sale` | `Customer` (or `CustomerID`), `Location`, `Status`, `SkipQuote` |
-| `cin7_create_purchase_order` | `Supplier` (or `SupplierID`), `Location`, `Status`, `OrderDate` |
+| `cin7_create_purchase_order` | `Approach` ("Invoice" or "Stock"), `Supplier` (or `SupplierID`), `Location`, `Status`, `OrderDate` |
 
 **Line item shape** (for `Lines` array in Sale and Purchase Order):
 
@@ -436,6 +436,7 @@ For large catalogs, use the snapshot workflow:
 2. Get supplier info: `cin7_get_supplier(name="Supplier Name")` or by ID
 3. Get product info for line items: `cin7_get_product(sku="PRODUCT-SKU")` to retrieve ProductID, SKU, and Name
 4. Fill required PO-level fields:
+   - `Approach` ("Invoice" for invoice-first, "Stock" for stock-first)
    - `Supplier` (supplier name or ID)
    - `Location` (warehouse location)
    - `OrderDate` (YYYY-MM-DD format)

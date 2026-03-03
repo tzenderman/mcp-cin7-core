@@ -20,6 +20,7 @@ from tests.fixtures.products import (
     PRODUCT_SAVE_RESPONSE,
     PRODUCT_UPDATE_RESPONSE,
     PRODUCT_SUPPLIERS_RESPONSE,
+    PRODUCT_SUPPLIERS_EMPTY_RESPONSE,
     PRODUCT_SUPPLIERS_UPDATE_RESPONSE,
 )
 from tests.fixtures.suppliers import (
@@ -966,8 +967,8 @@ class TestGetProductSuppliers:
 
         result = await mock_client.get_product_suppliers(product_id="prod-abc-123")
 
-        assert "Products" in result
-        assert result["Products"][0]["ProductID"] == "prod-abc-123"
+        assert "ProductSuppliers" in result
+        assert result["ProductSuppliers"][0]["ProductID"] == "prod-abc-123"
         call_args = mock_client._request.call_args
         assert call_args[0][1] == "product-suppliers", "API path must be 'product-suppliers'"
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
@@ -997,44 +998,83 @@ class TestGetProductSuppliers:
 
 
 class TestUpdateProductSuppliers:
-    """Tests for update_product_suppliers method."""
+    """Tests for update_product_suppliers method (upsert: POST when new, PUT when updating)."""
 
-    async def test_success(self, mock_client):
-        """Should return updated product suppliers data on success."""
+    def _make_resp(self, status_code, data, text=None):
         mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = PRODUCT_SUPPLIERS_UPDATE_RESPONSE
-        mock_resp.text = str(PRODUCT_SUPPLIERS_UPDATE_RESPONSE)
+        mock_resp.status_code = status_code
+        mock_resp.json.return_value = data
+        mock_resp.text = text or str(data)
         mock_resp.headers = {}
-        mock_client._request = AsyncMock(return_value=mock_resp)
+        return mock_resp
 
-        # API docs: PUT /product-suppliers expects a flat list of associations,
-        # each with both ProductID and SupplierID, wrapped in {"ProductSuppliers": [...]}
+    async def test_uses_post_when_no_existing_suppliers(self, mock_client):
+        """Should POST when product has no existing supplier associations.
+
+        Checks existing via GET first. If ProductSuppliers is empty → POST (create).
+        See: https://dearinventory.docs.apiary.io/#reference/reference-books/product-suppliers/post
+        """
+        get_resp = self._make_resp(200, PRODUCT_SUPPLIERS_EMPTY_RESPONSE)
+        post_resp = self._make_resp(201, PRODUCT_SUPPLIERS_UPDATE_RESPONSE)
+        mock_client._request = AsyncMock(side_effect=[get_resp, post_resp])
+
+        await mock_client.update_product_suppliers([
+            {"ProductID": "prod-abc-123", "SupplierID": "sup-222", "Cost": 10.00}
+        ])
+
+        calls = mock_client._request.call_args_list
+        assert len(calls) == 2
+        assert calls[0][0][0] == "get"   # first: GET to check existing
+        assert calls[1][0][0] == "post"  # second: POST to create
+
+    async def test_uses_put_when_existing_suppliers(self, mock_client):
+        """Should PUT when product already has supplier associations.
+
+        Checks existing via GET first. If ProductSuppliers is non-empty → PUT (update).
+        See: https://dearinventory.docs.apiary.io/#reference/reference-books/product-suppliers/put
+        """
+        get_resp = self._make_resp(200, PRODUCT_SUPPLIERS_RESPONSE)
+        put_resp = self._make_resp(200, PRODUCT_SUPPLIERS_UPDATE_RESPONSE)
+        mock_client._request = AsyncMock(side_effect=[get_resp, put_resp])
+
+        await mock_client.update_product_suppliers([
+            {"ProductID": "prod-abc-123", "SupplierID": "sup-222", "Cost": 10.00}
+        ])
+
+        calls = mock_client._request.call_args_list
+        assert len(calls) == 2
+        assert calls[0][0][0] == "get"  # first: GET to check existing
+        assert calls[1][0][0] == "put"  # second: PUT to update
+
+    async def test_injects_default_options_on_post(self, mock_client):
+        """A default ProductSupplierOptions entry (LocationID=None) is auto-injected."""
+        get_resp = self._make_resp(200, PRODUCT_SUPPLIERS_EMPTY_RESPONSE)
+        post_resp = self._make_resp(201, PRODUCT_SUPPLIERS_UPDATE_RESPONSE)
+        mock_client._request = AsyncMock(side_effect=[get_resp, post_resp])
+
         supplier_associations = [
-            {
-                "ProductID": "prod-abc-123",
-                "SupplierID": "sup-222",
-                "SupplierName": "New Supplier",
-                "Cost": 10.00,
-            }
+            {"ProductID": "prod-abc-123", "SupplierID": "sup-222", "Cost": 10.00}
         ]
-        result = await mock_client.update_product_suppliers(supplier_associations)
+        await mock_client.update_product_suppliers(supplier_associations)
 
-        call_args = mock_client._request.call_args
-        sent_payload = call_args.kwargs.get("json", call_args[1].get("json", {}))
-        assert sent_payload == {"ProductSuppliers": supplier_associations}
+        post_call = mock_client._request.call_args_list[1]
+        sent_payload = post_call.kwargs.get("json", post_call[1].get("json", {}))
+        expected_association = {
+            **supplier_associations[0],
+            "ProductSupplierOptions": [
+                {"LocationID": None, "LocationName": None, "SupplyIntervals": []}
+            ],
+        }
+        assert sent_payload == {"ProductSuppliers": [expected_association]}
 
     async def test_api_error_raises(self, mock_client):
-        """Should raise Cin7ClientError on API error."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 400
-        mock_resp.json.return_value = {"error": "Bad Request"}
-        mock_resp.text = ERROR_BAD_REQUEST_400
-        mock_resp.headers = {}
-        mock_client._request = AsyncMock(return_value=mock_resp)
+        """Should raise Cin7ClientError when POST/PUT call fails."""
+        # GET fails → falls back to POST; POST also fails → raises error
+        error_resp = self._make_resp(400, {"error": "Bad Request"}, ERROR_BAD_REQUEST_400)
+        mock_client._request = AsyncMock(return_value=error_resp)
 
-        with pytest.raises(Cin7ClientError, match="ProductSuppliers update error"):
-            await mock_client.update_product_suppliers([{"ProductID": "bad"}])
+        with pytest.raises(Cin7ClientError, match="ProductSuppliers create error"):
+            await mock_client.update_product_suppliers([{"ProductID": "prod-abc-123"}])
 
 
 # ---------------------------------------------------------------------------

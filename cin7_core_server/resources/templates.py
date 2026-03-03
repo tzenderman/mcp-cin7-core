@@ -112,6 +112,7 @@ async def resource_purchase_order_template() -> str:
     template = {
         "TaskID": "",
         "Supplier": "",
+        "Approach": "Invoice",
         "Location": "",
         "Status": "",
         "OrderDate": "",

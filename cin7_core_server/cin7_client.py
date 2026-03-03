@@ -660,26 +660,57 @@ class Cin7Client:
         self,
         supplier_associations: list[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """Update product-supplier associations via PUT product-suppliers.
+        """Create or update product-supplier associations (upsert).
 
-        API docs: PUT /product-suppliers
-        Body: {"ProductSuppliers": [flat list of associations]}
-        Each association must contain ProductID + SupplierID (and optional cost/SKU fields).
+        Checks existing associations for the product first:
+        - POST /product-suppliers if no existing associations (create new)
+        - PUT /product-suppliers if associations already exist (update/replace all)
 
-        See: https://dearinventory.docs.apiary.io/#reference/reference-books/product-suppliers/put
+        API requirement: every association must have exactly one ProductSupplierOptions
+        entry with LocationID=null (the "default" options set). If none is provided,
+        one is injected automatically.
+
+        API docs:
+        - POST: https://dearinventory.docs.apiary.io/#reference/reference-books/product-suppliers/post
+        - PUT: https://dearinventory.docs.apiary.io/#reference/reference-books/product-suppliers/put
         """
-        payload = {"ProductSuppliers": supplier_associations}
-        response = await self._request("put", "product-suppliers", json=payload)
+        # Inject default ProductSupplierOptions where missing
+        ensured = []
+        for assoc in supplier_associations:
+            a = dict(assoc)
+            options = a.get("ProductSupplierOptions") or []
+            if not any(opt.get("LocationID") is None for opt in options):
+                options = list(options) + [
+                    {"LocationID": None, "LocationName": None, "SupplyIntervals": []}
+                ]
+                a["ProductSupplierOptions"] = options
+            ensured.append(a)
+
+        payload = {"ProductSuppliers": ensured}
+
+        # Choose POST (create) vs PUT (update) based on whether associations already exist
+        method = "put"
+        product_id = supplier_associations[0].get("ProductID") if supplier_associations else None
+        if product_id:
+            try:
+                existing = await self.get_product_suppliers(product_id=product_id)
+                if not existing.get("ProductSuppliers"):
+                    method = "post"
+            except Cin7ClientError:
+                method = "post"
+
+        response = await self._request(method, "product-suppliers", json=payload)
         try:
             data = response.json()
         except Exception:
             data = {"raw": _truncate(response.text or "")}
 
-        if response.status_code in (200, 204):
+        if response.status_code in (200, 201, 204):
             return data if isinstance(data, dict) else {"result": data}
 
         raise Cin7ClientError(
-            f"ProductSuppliers update error: {response.status_code} {response.text[:500]}"
+            f"ProductSuppliers {'create' if method == 'post' else 'update'} error: "
+            f"{response.status_code} {response.text[:500]}"
         )
 
     async def list_product_availability(

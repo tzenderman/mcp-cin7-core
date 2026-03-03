@@ -60,31 +60,39 @@ PRODUCT_UPDATE_RESPONSE = {
 }
 
 PRODUCT_SUPPLIERS_RESPONSE = {
-    "Products": [
+    "ProductSuppliers": [
         {
+            "ProductSupplierID": "ps-aaa-111",
             "ProductID": "prod-abc-123",
-            "Suppliers": [
-                {
-                    "SupplierID": "sup-111",
-                    "SupplierName": "Widget Supplier Co",
-                    "SupplierInventoryCode": "WS-001",
-                    "Cost": 12.50,
-                }
+            "SupplierID": "sup-111",
+            "SupplierName": "Widget Supplier Co",
+            "SupplierInventoryCode": "WS-001",
+            "Cost": 12.50,
+            "Currency": "AUD",
+            "DropShip": False,
+            "ProductSupplierOptions": [
+                {"LocationID": None, "LocationName": None, "SupplyIntervals": []}
             ],
         }
     ]
 }
 
+PRODUCT_SUPPLIERS_EMPTY_RESPONSE = {
+    "ProductSuppliers": []
+}
+
 PRODUCT_SUPPLIERS_UPDATE_RESPONSE = {
-    "Products": [
+    "ProductSuppliers": [
         {
+            "ProductSupplierID": "ps-bbb-222",
             "ProductID": "prod-abc-123",
-            "Suppliers": [
-                {
-                    "SupplierID": "sup-222",
-                    "SupplierName": "New Supplier",
-                    "Cost": 10.00,
-                }
+            "SupplierID": "sup-222",
+            "SupplierName": "New Supplier",
+            "Cost": 10.00,
+            "Currency": "AUD",
+            "DropShip": False,
+            "ProductSupplierOptions": [
+                {"LocationID": None, "LocationName": None, "SupplyIntervals": []}
             ],
         }
     ]
