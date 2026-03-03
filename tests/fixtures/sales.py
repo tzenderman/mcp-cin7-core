@@ -66,3 +66,27 @@ SALE_ORDER_RESPONSE = {
         }
     ],
 }
+
+SALE_UPDATE_HEADER_RESPONSE = {
+    "ID": "sale-abc-123",
+    "SaleID": "sale-abc-123",
+    "Customer": "Updated Customer",
+    "Status": "DRAFT",
+}
+
+SALE_UPDATE_ORDER_RESPONSE = {
+    "SaleID": "sale-abc-123",
+    "Status": "DRAFT",
+    "Lines": [
+        {
+            "ProductID": "prod-abc-123",
+            "SKU": "WIDGET-001",
+            "Name": "Blue Widget",
+            "Quantity": 5,
+            "Price": 29.99,
+            "Tax": 0,
+            "TaxRule": "Tax Exempt",
+            "Total": 149.95,
+        }
+    ],
+}

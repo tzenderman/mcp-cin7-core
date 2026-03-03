@@ -67,3 +67,28 @@ PO_ORDER_RESPONSE = {
         }
     ],
 }
+
+PO_UPDATE_HEADER_RESPONSE = {
+    "ID": "po-abc-123",
+    "TaskID": "po-task-001",
+    "Supplier": "Acme Supplies",
+    "Status": "DRAFT",
+    "Location": "Main Warehouse",
+}
+
+PO_UPDATE_ORDER_RESPONSE = {
+    "TaskID": "po-task-001",
+    "Status": "DRAFT",
+    "Lines": [
+        {
+            "ProductID": "prod-abc-123",
+            "SKU": "WIDGET-001",
+            "Name": "Blue Widget",
+            "Quantity": 20,
+            "Price": 12.50,
+            "Tax": 0,
+            "TaxRule": "Tax Exempt",
+            "Total": 250.00,
+        }
+    ],
+}
