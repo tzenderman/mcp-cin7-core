@@ -799,6 +799,8 @@ class TestGetPurchaseOrder:
         assert result["ID"] == "po-abc-123"
         assert result["Supplier"] == "Acme Supplies"
         call_args = mock_client._request.call_args
+        assert call_args[0][0] == "get"
+        assert call_args[0][1] == "advanced-purchase"
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["ID"] == "po-abc-123"
 
