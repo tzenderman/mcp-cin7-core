@@ -41,8 +41,6 @@ from tests.fixtures.purchase_orders import (
     PO_SINGLE,
     PO_HEADER_RESPONSE,
     PO_ORDER_RESPONSE,
-    PO_UPDATE_HEADER_RESPONSE,
-    PO_UPDATE_ORDER_RESPONSE,
 )
 from tests.fixtures.stock import (
     STOCK_AVAILABILITY_LIST,
@@ -1896,7 +1894,7 @@ class TestUpdatePurchaseOrder:
         """Should update PO header with single PUT /Purchase call when no Lines."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = '{"ID": "po-abc-123", "Supplier": "Acme"}'
+        mock_response.text = '{"ID": "po-abc-123", "TaskID": "po-task-001", "Supplier": "Acme Supplies", "Status": "DRAFT"}'
         mock_response.json.return_value = {
             "ID": "po-abc-123",
             "TaskID": "po-task-001",
@@ -1974,6 +1972,7 @@ class TestUpdatePurchaseOrder:
         assert second_call[0][0] == "put"
         assert second_call[0][1] == "purchase/order"
         second_body = second_call.kwargs.get("json", second_call[1].get("json", {}))
+        # Implementation resolves po_id from result.get("ID") first, so "po-abc-123" (from "ID") is used
         assert second_body.get("TaskID") == "po-abc-123"
         assert "Lines" in second_body
         assert len(second_body["Lines"]) == 1
