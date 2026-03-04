@@ -642,6 +642,57 @@ class Cin7Client:
 
         return data if isinstance(data, dict) else {"result": data}
 
+    async def update_purchase_order(self, purchase_order: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing Purchase Order via PUT Purchase, then optionally replace order lines.
+
+        If 'Lines' is present and non-empty in the payload, a second PUT /purchase/order
+        call replaces all existing order lines. An empty Lines list is ignored.
+
+        If the header update succeeds but the lines update fails, raises Cin7ClientError
+        with the PO ID so the caller knows the partial state.
+        """
+        payload = dict(purchase_order)
+        lines = payload.pop("Lines", None) or None  # treat [] as absent
+
+        response = await self._request("put", "Purchase", json=payload)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code not in (200, 204):
+            raise Cin7ClientError(
+                f"Purchase Order update error: {response.status_code} {response.text[:500]}"
+            )
+
+        result = data if isinstance(data, dict) else {"result": data}
+
+        if lines:
+            po_id = result.get("ID") or result.get("TaskID") or purchase_order.get("ID") or purchase_order.get("TaskID")
+            order_payload: Dict[str, Any] = {
+                "TaskID": po_id,
+                "Lines": lines,
+            }
+            if "Status" in payload:
+                order_payload["Status"] = payload["Status"]
+
+            order_response = await self._request("put", "purchase/order", json=order_payload)
+            try:
+                order_data = order_response.json()
+            except Exception:
+                order_data = {"raw": _truncate(order_response.text or "")}
+
+            if order_response.status_code not in (200, 204):
+                raise Cin7ClientError(
+                    f"PO header updated (ID={po_id}) but order lines update failed: "
+                    f"{order_response.status_code} {order_response.text[:500]}"
+                )
+
+            if isinstance(order_data, dict):
+                result["Order"] = order_data
+
+        return result
+
     async def list_stock_transfers(
         self,
         *,
