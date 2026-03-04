@@ -225,7 +225,9 @@ async def test_list_sales_path_is_salelist_lowercase_l(self, mock_client):
 | `list_sales` | GET | `saleList` | `Page`, `Limit`, `Search` |
 | `get_sale` | GET | `Sale` | `ID` |
 | `list_purchase_orders` | GET | `purchaseList` | `Page`, `Limit`, `Search` |
-| `get_purchase_order` | GET | `Purchase` | `ID` |
+| `get_purchase_order` | GET | `advanced-purchase` | `ID` |
+| `save_purchase_order` | POST | `advanced-purchase` | — |
+| `update_purchase_order` | PUT | `advanced-purchase` | — |
 | `list_stock_transfers` | GET | `stockTransferList` | `Page`, `Limit`, `Status`, `Search` |
 | `get_stock_transfer` | GET | `stockTransfer` | `TaskID` |
 | `list_product_availability` | GET | `ref/productavailability` | `Page`, `Limit`, `ID`, `Sku`, `Location`, `Batch`, `Category` |
