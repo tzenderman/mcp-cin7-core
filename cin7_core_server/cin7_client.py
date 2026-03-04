@@ -581,7 +581,7 @@ class Cin7Client:
         """Create a new Purchase Order via two-step Cin7 API process.
 
         1. POST to /advanced-purchase - creates the base purchase header, returns ID
-        2. POST to /purchase/order - adds order lines using the TaskID
+        2. POST to /purchase/order - adds order lines using the returned ID
 
         Status must be provided by the caller — no default is injected.
         """
@@ -606,7 +606,7 @@ class Cin7Client:
 
         task_id = data.get("ID") or data.get("TaskID")
         if not task_id:
-            raise Cin7ClientError("No TaskID returned from Purchase creation")
+            raise Cin7ClientError("No ID returned from advanced-purchase creation")
 
         # STEP 2: Add order lines (if we have any)
         if lines:

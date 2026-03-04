@@ -1646,7 +1646,7 @@ class TestSavePurchaseOrder:
             await mock_client.save_purchase_order(payload)
 
     async def test_raises_if_no_task_id_returned(self, mock_client):
-        """Should raise Cin7ClientError if no TaskID returned."""
+        """Should raise Cin7ClientError if no ID returned from advanced-purchase."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = '{"Supplier": "Test"}'
@@ -1654,7 +1654,7 @@ class TestSavePurchaseOrder:
         mock_client._request = AsyncMock(return_value=mock_response)
 
         payload = {"Supplier": "Test", "Location": "MAIN", "Lines": [{"ProductID": "123"}]}
-        with pytest.raises(Cin7ClientError, match="No TaskID returned"):
+        with pytest.raises(Cin7ClientError, match="No ID returned from advanced-purchase creation"):
             await mock_client.save_purchase_order(payload)
 
 
@@ -2534,7 +2534,7 @@ class TestApiRequestContracts:
 
     # ---- Update Purchase Order with Lines ----
 
-    async def test_update_purchase_order_header_uses_put_purchase(self, mock_client):
+    async def test_update_purchase_order_header_uses_put_advanced_purchase(self, mock_client):
         """API docs: PUT /advanced-purchase — path is 'advanced-purchase', method is 'put'.
 
         See: https://dearinventory.docs.apiary.io/#reference/purchase/advancedpurchase/put
