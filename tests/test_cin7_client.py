@@ -1505,7 +1505,7 @@ class TestSavePurchaseOrder:
 
     async def test_creates_purchase_with_lines_two_step(self, mock_client):
         """Should create purchase header then add order lines in two API calls."""
-        # Step 1: POST /Purchase returns TaskID
+        # Step 1: POST /advanced-purchase returns ID
         header_response = MagicMock()
         header_response.status_code = 200
         header_response.text = '{"ID": "task-123", "Supplier": "Test Supplier"}'

@@ -604,7 +604,7 @@ class Cin7Client:
                 f"Purchase Order header creation error: {response.status_code} {response.text[:500]}"
             )
 
-        task_id = data.get("ID") or data.get("TaskID")
+        task_id = data.get("ID") or data.get("TaskID")  # advanced-purchase returns ID; purchase/order expects TaskID
         if not task_id:
             raise Cin7ClientError("No ID returned from advanced-purchase creation")
 
