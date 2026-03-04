@@ -2333,7 +2333,7 @@ class TestApiRequestContracts:
 
         await mock_client.save_purchase_order({"Supplier": "Acme", "Location": "Main"})
 
-        call = mock_client._request.call_args
+        call = mock_client._request.call_args_list[0]
         assert call[0][0] == "post"
         assert call[0][1] == "advanced-purchase", (
             "Must use 'advanced-purchase' not 'Purchase' — /Purchase is deprecated"
