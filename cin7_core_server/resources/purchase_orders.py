@@ -134,3 +134,49 @@ async def cin7_create_purchase_order(payload: Dict[str, Any]) -> Dict[str, Any]:
     result = await client.save_purchase_order(payload)
     logger.debug("Tool result: cin7_create_purchase_order -> %s", truncate(str(result)))
     return result
+
+
+async def cin7_update_purchase_order(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Update an existing Cin7 Core purchase order via PUT Purchase.
+
+    Updates PO header fields and optionally replaces all order lines.
+
+    Include a 'Lines' array to replace all existing order lines. Omit 'Lines'
+    (or pass an empty list) to update header fields only.
+
+    Required fields:
+    - ID (Guid — the PO ID to update, required to identify the record)
+
+    Optional header fields (any subset can be updated):
+    - Supplier or SupplierID
+    - Location
+    - OrderDate (ISO date string, e.g. "2024-06-01")
+    - RequiredBy (ISO date string)
+    - Status ("DRAFT" or "AUTHORISED")
+    - Approach ("Invoice" or "Stock")
+
+    Required fields for each line item (if including Lines):
+    - ProductID (GUID — retrieve with cin7_get_product)
+    - SKU (product SKU)
+    - Name (product name)
+    - Quantity (minimum 1)
+    - Price (unit price)
+    - Tax (tax amount)
+    - TaxRule (tax rule name, e.g. "Tax Exempt")
+    - Total (line total: (Price x Quantity) - Discount + Tax)
+
+    Note: Providing Lines replaces ALL existing lines on the PO. To preserve
+    existing lines, first retrieve them with cin7_get_purchase_order, then
+    include them (modified) in the Lines array.
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/put
+    """
+    logger.debug(
+        "Tool call: cin7_update_purchase_order(payload=%s)", truncate(str(payload))
+    )
+    client = Cin7Client.from_env()
+    result = await client.update_purchase_order(payload)
+    logger.debug(
+        "Tool result: cin7_update_purchase_order -> %s", truncate(str(result))
+    )
+    return result

@@ -61,6 +61,7 @@ def create_mcp_server(auth=None):
     mcp.tool()(purchase_orders.cin7_purchase_orders)
     mcp.tool()(purchase_orders.cin7_get_purchase_order)
     mcp.tool()(purchase_orders.cin7_create_purchase_order)
+    mcp.tool()(purchase_orders.cin7_update_purchase_order)
 
     # -- Tools: stock -------------------------------------------------------
     mcp.tool()(stock.cin7_stock_levels)

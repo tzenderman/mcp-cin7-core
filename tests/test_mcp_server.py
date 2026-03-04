@@ -28,6 +28,8 @@ from tests.fixtures.purchase_orders import (
     PO_LIST_RESPONSE,
     PO_SINGLE,
     PO_ORDER_RESPONSE,
+    PO_UPDATE_HEADER_RESPONSE,
+    PO_UPDATE_ORDER_RESPONSE,
 )
 from tests.fixtures.stock_transfers import (
     STOCK_TRANSFER_LIST_RESPONSE,
@@ -1226,6 +1228,120 @@ class TestCin7CreatePurchaseOrder:
 
         mock_instance.save_purchase_order.assert_called_once_with(payload)
         assert result["ID"] == "po-abc-123"
+
+
+# ---------------------------------------------------------------------------
+# TestCin7UpdatePurchaseOrder
+# ---------------------------------------------------------------------------
+
+
+class TestCin7UpdatePurchaseOrder:
+    """Tests for cin7_update_purchase_order tool."""
+
+    @pytest.mark.asyncio
+    async def test_calls_update_purchase_order(self, mock_cin7_class):
+        """Should delegate to client.update_purchase_order with the payload."""
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.update_purchase_order = AsyncMock(
+            return_value=PO_UPDATE_HEADER_RESPONSE
+        )
+
+        from cin7_core_server.resources.purchase_orders import cin7_update_purchase_order
+
+        payload = {
+            "ID": "po-abc-123",
+            "Supplier": "Acme Supplies",
+            "Status": "DRAFT",
+        }
+        result = await cin7_update_purchase_order(payload)
+
+        mock_instance.update_purchase_order.assert_called_once_with(payload)
+        assert result["ID"] == "po-abc-123"
+
+    @pytest.mark.asyncio
+    async def test_calls_update_purchase_order_with_lines(self, mock_cin7_class):
+        """Should forward Lines in the payload to client.update_purchase_order."""
+        mock_class, mock_instance = mock_cin7_class
+        mock_result = dict(PO_UPDATE_HEADER_RESPONSE)
+        mock_result["Order"] = PO_UPDATE_ORDER_RESPONSE
+        mock_instance.update_purchase_order = AsyncMock(return_value=mock_result)
+
+        from cin7_core_server.resources.purchase_orders import cin7_update_purchase_order
+
+        payload = {
+            "ID": "po-abc-123",
+            "Supplier": "Acme Supplies",
+            "Lines": [
+                {
+                    "ProductID": "prod-abc-123",
+                    "SKU": "WIDGET-001",
+                    "Name": "Blue Widget",
+                    "Quantity": 20,
+                    "Price": 12.50,
+                    "Tax": 0,
+                    "TaxRule": "Tax Exempt",
+                    "Total": 250.00,
+                }
+            ],
+        }
+        result = await cin7_update_purchase_order(payload)
+
+        mock_instance.update_purchase_order.assert_called_once_with(payload)
+        assert "Order" in result
+
+    @pytest.mark.asyncio
+    async def test_update_purchase_order_api_contract(self, mock_cin7_class):
+        """Contract test: update PO with line items — documents expected payload shape.
+
+        The payload is forwarded unchanged to client.update_purchase_order().
+        The client handles the two-step PUT /Purchase → PUT /purchase/order internally.
+
+        Required PO-level fields for update:
+        - ID (Guid — the PO ID, required to identify which PO to update)
+
+        Line item required fields (per PUT /purchase/order API docs):
+        - ProductID (Guid)
+        - SKU (String)
+        - Name (String)
+        - Quantity (Decimal, min 1)
+        - Price (Decimal)
+        - Tax (Decimal)
+        - TaxRule (String)
+        - Total (Decimal — Price × Quantity − Discount + Tax)
+
+        Docs: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/put
+        """
+        mock_class, mock_instance = mock_cin7_class
+        mock_result = dict(PO_UPDATE_HEADER_RESPONSE)
+        mock_result["Order"] = PO_UPDATE_ORDER_RESPONSE
+        mock_instance.update_purchase_order = AsyncMock(return_value=mock_result)
+
+        from cin7_core_server.resources.purchase_orders import cin7_update_purchase_order
+
+        payload = {
+            "ID": "po-abc-123",
+            "Supplier": "Acme Supplies",
+            "Location": "Main Warehouse",
+            "OrderDate": "2024-06-01",
+            "Status": "DRAFT",
+            "Lines": [
+                {
+                    "ProductID": "prod-abc-123",
+                    "SKU": "WIDGET-001",
+                    "Name": "Blue Widget",
+                    "Quantity": 20,
+                    "Price": 12.50,
+                    "Tax": 0,
+                    "TaxRule": "Tax Exempt",
+                    "Total": 250.00,
+                }
+            ],
+        }
+        result = await cin7_update_purchase_order(payload)
+
+        mock_instance.update_purchase_order.assert_called_once_with(payload)
+        assert result["ID"] == "po-abc-123"
+        assert "Order" in result
 
 
 # ---------------------------------------------------------------------------
