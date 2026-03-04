@@ -169,12 +169,36 @@ async def cin7_create_sale(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def cin7_update_sale(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Update a Cin7 Core sale via PUT Sale.
+    """Update an existing Cin7 Core sale via PUT Sale.
 
-    Provide the JSON payload as defined by Cin7 Core API. This tool forwards
-    the payload to PUT Sale and returns the API response.
+    Updates sale header fields and optionally replaces all order lines.
 
-    The payload must include the SaleID of the sale to update.
+    Include a 'Lines' array to replace all existing order lines. Omit 'Lines'
+    (or pass an empty list) to update header fields only.
+
+    Required fields:
+    - SaleID (Guid — the sale ID to update, required to identify the record)
+
+    Optional header fields (any subset can be updated):
+    - Customer or CustomerID
+    - Location
+    - Status ("DRAFT" or "AUTHORISED")
+    - SaleOrderDate (ISO date string)
+    - Terms, TaxRule, PriceTier
+
+    Required fields for each line item (if including Lines):
+    - ProductID (GUID — retrieve with cin7_get_product)
+    - SKU (product SKU)
+    - Name (product name)
+    - Quantity (minimum 1)
+    - Price (unit price)
+    - Tax (tax amount)
+    - TaxRule (tax rule name, e.g. "Tax Exempt")
+    - Total (line total: (Price x Quantity) - Discount + Tax)
+
+    Note: Providing Lines replaces ALL existing lines on the sale. To preserve
+    existing lines, first retrieve them with cin7_get_sale, then include them
+    (modified) in the Lines array.
 
     Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/put
     """

@@ -21,8 +21,6 @@ from tests.fixtures.suppliers import (
 from tests.fixtures.sales import (
     SALE_LIST_RESPONSE,
     SALE_SINGLE,
-    SALE_UPDATE_HEADER_RESPONSE,
-    SALE_UPDATE_ORDER_RESPONSE,
 )
 from tests.fixtures.purchase_orders import (
     PO_LIST_RESPONSE,
