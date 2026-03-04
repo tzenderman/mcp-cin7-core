@@ -41,6 +41,7 @@ from tests.fixtures.purchase_orders import (
     PO_SINGLE,
     PO_HEADER_RESPONSE,
     PO_ORDER_RESPONSE,
+    PO_UPDATE_HEADER_RESPONSE,
 )
 from tests.fixtures.stock import (
     STOCK_AVAILABILITY_LIST,
@@ -2302,22 +2303,59 @@ class TestApiRequestContracts:
         assert params["Page"] == 1
         assert params["Limit"] == 100
 
-    async def test_get_purchase_order_path_is_purchase_with_id(self, mock_client):
-        """API docs: GET /Purchase?ID=... — path is 'Purchase', param is 'ID'.
+    async def test_get_purchase_order_path_is_advanced_purchase(self, mock_client):
+        """API: GET /advanced-purchase?ID=... — /Purchase is deprecated and rejects
+        Advanced and Service PO types.
 
-        See: https://dearinventory.docs.apiary.io/#reference/purchase/purchase/get
+        See: https://dearinventory.docs.apiary.io/#reference/purchase/advanced-purchase/get
         """
-        mock_client._request = AsyncMock(
-            return_value=self._ok_resp({"PurchaseList": [PO_SINGLE], "Total": 1})
-        )
+        # advanced-purchase returns a flat object, not wrapped in PurchaseList
+        mock_client._request = AsyncMock(return_value=self._ok_resp(PO_SINGLE))
 
         await mock_client.get_purchase_order(purchase_order_id="po-abc-123")
 
         call = mock_client._request.call_args
         assert call[0][0] == "get"
-        assert call[0][1] == "Purchase"
+        assert call[0][1] == "advanced-purchase", (
+            "Must use 'advanced-purchase' not 'Purchase' — /Purchase is deprecated"
+        )
+        assert "Purchase" not in call[0][1]
         params = call.kwargs.get("params", call[1].get("params", {}))
         assert params["ID"] == "po-abc-123"
+
+    async def test_save_purchase_order_path_is_advanced_purchase(self, mock_client):
+        """API: POST /advanced-purchase — /Purchase is deprecated and rejects
+        Advanced and Service PO types.
+
+        See: https://dearinventory.docs.apiary.io/#reference/purchase/advanced-purchase/post
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(PO_HEADER_RESPONSE))
+
+        await mock_client.save_purchase_order({"Supplier": "Acme", "Location": "Main"})
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "post"
+        assert call[0][1] == "advanced-purchase", (
+            "Must use 'advanced-purchase' not 'Purchase' — /Purchase is deprecated"
+        )
+        assert "Purchase" not in call[0][1]
+
+    async def test_update_purchase_order_path_is_advanced_purchase(self, mock_client):
+        """API: PUT /advanced-purchase — /Purchase is deprecated and rejects
+        Advanced and Service PO types.
+
+        See: https://dearinventory.docs.apiary.io/#reference/purchase/advanced-purchase/put
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(PO_UPDATE_HEADER_RESPONSE))
+
+        await mock_client.update_purchase_order({"ID": "po-abc-123", "Supplier": "Acme"})
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "put"
+        assert call[0][1] == "advanced-purchase", (
+            "Must use 'advanced-purchase' not 'Purchase' — /Purchase is deprecated"
+        )
+        assert "Purchase" not in call[0][1]
 
     # ---- Stock Transfers ----
 
