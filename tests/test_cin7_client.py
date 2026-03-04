@@ -786,12 +786,12 @@ class TestListPurchaseOrders:
 class TestGetPurchaseOrder:
     """Tests for get_purchase_order method."""
 
-    async def test_success_returns_first_from_purchase_list(self, mock_client):
-        """Should return first item from PurchaseList in response."""
+    async def test_success_returns_flat_advanced_purchase_response(self, mock_client):
+        """advanced-purchase returns a flat object — no PurchaseList wrapper."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {"PurchaseList": [PO_SINGLE], "Total": 1}
-        mock_resp.text = str({"PurchaseList": [PO_SINGLE]})
+        mock_resp.json.return_value = PO_SINGLE
+        mock_resp.text = str(PO_SINGLE)
         mock_client._request = AsyncMock(return_value=mock_resp)
 
         result = await mock_client.get_purchase_order(purchase_order_id="po-abc-123")
@@ -802,18 +802,16 @@ class TestGetPurchaseOrder:
         params = call_args.kwargs.get("params", call_args[1].get("params", {}))
         assert params["ID"] == "po-abc-123"
 
-    async def test_not_found_empty_purchase_list_returns_data(self, mock_client):
-        """When PurchaseList is empty but data dict is truthy, returns data dict."""
+    async def test_200_with_empty_dict_raises_error(self, mock_client):
+        """When advanced-purchase returns 200 with empty body, raises Cin7ClientError."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        empty_response = {"PurchaseList": [], "Total": 0}
-        mock_resp.json.return_value = empty_response
-        mock_resp.text = str(empty_response)
+        mock_resp.json.return_value = {}
+        mock_resp.text = "{}"
         mock_client._request = AsyncMock(return_value=mock_resp)
 
-        # The data dict is truthy so it falls through to return data
-        result = await mock_client.get_purchase_order(purchase_order_id="nonexistent")
-        assert result == empty_response
+        with pytest.raises(Cin7ClientError, match="Purchase Order not found"):
+            await mock_client.get_purchase_order(purchase_order_id="nonexistent")
 
     async def test_no_id_raises(self, mock_client):
         """Should raise Cin7ClientError if purchase_order_id not provided."""
@@ -1551,10 +1549,10 @@ class TestSavePurchaseOrder:
         # Should have made two POST calls
         assert mock_client._request.call_count == 2
 
-        # First call: POST /Purchase (header only, no Lines)
+        # First call: POST /advanced-purchase (header only, no Lines)
         first_call = mock_client._request.call_args_list[0]
         assert first_call[0][0] == "post"
-        assert first_call[0][1] == "Purchase"
+        assert first_call[0][1] == "advanced-purchase"
         first_payload = first_call.kwargs.get("json", first_call[1].get("json", {}))
         assert "Lines" not in first_payload
         assert first_payload.get("Supplier") == "Test Supplier"
@@ -1892,7 +1890,7 @@ class TestUpdatePurchaseOrder:
     """Tests for update_purchase_order method."""
 
     async def test_updates_po_header_only(self, mock_client):
-        """Should update PO header with single PUT /Purchase call when no Lines."""
+        """Should update PO header with single PUT /advanced-purchase call when no Lines."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = '{"ID": "po-abc-123", "TaskID": "po-task-001", "Supplier": "Acme Supplies", "Status": "DRAFT"}'
@@ -1913,7 +1911,7 @@ class TestUpdatePurchaseOrder:
         assert mock_client._request.call_count == 1
         call = mock_client._request.call_args
         assert call[0][0] == "put"
-        assert call[0][1] == "Purchase"
+        assert call[0][1] == "advanced-purchase"
         assert result["ID"] == "po-abc-123"
 
     async def test_updates_po_with_lines_two_step(self, mock_client):
@@ -1961,10 +1959,10 @@ class TestUpdatePurchaseOrder:
 
         assert mock_client._request.call_count == 2
 
-        # First call: PUT /Purchase (no Lines)
+        # First call: PUT /advanced-purchase (no Lines)
         first_call = mock_client._request.call_args_list[0]
         assert first_call[0][0] == "put"
-        assert first_call[0][1] == "Purchase"
+        assert first_call[0][1] == "advanced-purchase"
         first_body = first_call.kwargs.get("json", first_call[1].get("json", {}))
         assert "Lines" not in first_body
 
@@ -1994,7 +1992,7 @@ class TestUpdatePurchaseOrder:
         assert mock_client._request.call_count == 1
 
     async def test_raises_on_header_update_error(self, mock_client):
-        """Should raise Cin7ClientError when PUT /Purchase returns error."""
+        """Should raise Cin7ClientError when PUT /advanced-purchase returns error."""
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_response.text = "Purchase Order not found"
