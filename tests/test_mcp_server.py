@@ -21,6 +21,8 @@ from tests.fixtures.suppliers import (
 from tests.fixtures.sales import (
     SALE_LIST_RESPONSE,
     SALE_SINGLE,
+    SALE_UPDATE_HEADER_RESPONSE,
+    SALE_UPDATE_ORDER_RESPONSE,
 )
 from tests.fixtures.purchase_orders import (
     PO_LIST_RESPONSE,
@@ -1849,6 +1851,94 @@ class TestSaleTools:
 
         mock_instance.save_sale.assert_called_once_with(payload)
         assert result["ID"] == "sale-abc-123"
+
+    @pytest.mark.asyncio
+    async def test_cin7_update_sale_with_lines_calls_client(self):
+        """Should call update_sale on client, forwarding Lines in the payload."""
+        mock_result = {
+            "ID": "sale-abc-123",
+            "SaleID": "sale-abc-123",
+            "Customer": "Updated Customer",
+            "Status": "DRAFT",
+            "Order": {"SaleID": "sale-abc-123", "Lines": [{"SKU": "WIDGET-001"}]},
+        }
+
+        with patch("cin7_core_server.resources.sales.Cin7Client") as mock_class:
+            mock_client = MagicMock()
+            mock_client.update_sale = AsyncMock(return_value=mock_result)
+            mock_class.from_env.return_value = mock_client
+
+            from cin7_core_server.resources.sales import cin7_update_sale
+
+            payload = {
+                "SaleID": "sale-abc-123",
+                "Customer": "Updated Customer",
+                "Lines": [
+                    {
+                        "ProductID": "prod-abc-123",
+                        "SKU": "WIDGET-001",
+                        "Name": "Blue Widget",
+                        "Quantity": 5,
+                        "Price": 29.99,
+                        "Tax": 0,
+                        "TaxRule": "Tax Exempt",
+                        "Total": 149.95,
+                    }
+                ],
+            }
+            result = await cin7_update_sale(payload)
+
+            mock_client.update_sale.assert_called_once_with(payload)
+            assert "Order" in result
+
+    @pytest.mark.asyncio
+    async def test_update_sale_with_lines_api_contract(self, mock_cin7_class):
+        """Contract test: update sale with line items — documents expected payload shape.
+
+        The payload is forwarded unchanged to client.update_sale().
+        The client handles the two-step PUT /Sale → PUT /sale/order internally.
+
+        Line item required fields (per PUT /sale/order API docs):
+        - ProductID (Guid)
+        - SKU (String)
+        - Name (String)
+        - Quantity (Decimal, min 1)
+        - Price (Decimal)
+        - Tax (Decimal)
+        - TaxRule (String)
+        - Total (Decimal — Price × Quantity − Discount + Tax)
+        """
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.update_sale = AsyncMock(return_value={
+            "ID": "sale-abc-123",
+            "SaleID": "sale-abc-123",
+            "Customer": "Acme Corp",
+            "Status": "DRAFT",
+            "Order": {"Lines": [{"SKU": "WIDGET-001", "Quantity": 5}]},
+        })
+
+        from cin7_core_server.resources.sales import cin7_update_sale
+
+        payload = {
+            "SaleID": "sale-abc-123",
+            "Customer": "Acme Corp",
+            "Lines": [
+                {
+                    "ProductID": "prod-abc-123",
+                    "SKU": "WIDGET-001",
+                    "Name": "Blue Widget",
+                    "Quantity": 5,
+                    "Price": 29.99,
+                    "Tax": 0,
+                    "TaxRule": "Tax Exempt",
+                    "Total": 149.95,
+                }
+            ],
+        }
+        result = await cin7_update_sale(payload)
+
+        mock_instance.update_sale.assert_called_once_with(payload)
+        assert result["SaleID"] == "sale-abc-123"
 
 
 # ---------------------------------------------------------------------------
