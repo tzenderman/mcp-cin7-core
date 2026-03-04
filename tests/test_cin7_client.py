@@ -41,6 +41,8 @@ from tests.fixtures.purchase_orders import (
     PO_SINGLE,
     PO_HEADER_RESPONSE,
     PO_ORDER_RESPONSE,
+    PO_UPDATE_HEADER_RESPONSE,
+    PO_UPDATE_ORDER_RESPONSE,
 )
 from tests.fixtures.stock import (
     STOCK_AVAILABILITY_LIST,
@@ -1880,6 +1882,153 @@ class TestSavePurchaseOrderOrphanedId:
         }
         with pytest.raises(Cin7ClientError, match=r"po-orphan-456"):
             await mock_client.save_purchase_order(payload)
+
+
+# ---------------------------------------------------------------------------
+# TestUpdatePurchaseOrder
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePurchaseOrder:
+    """Tests for update_purchase_order method."""
+
+    async def test_updates_po_header_only(self, mock_client):
+        """Should update PO header with single PUT /Purchase call when no Lines."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"ID": "po-abc-123", "Supplier": "Acme"}'
+        mock_response.json.return_value = {
+            "ID": "po-abc-123",
+            "TaskID": "po-task-001",
+            "Supplier": "Acme Supplies",
+            "Status": "DRAFT",
+        }
+        mock_response.headers = {}
+        mock_client._request = AsyncMock(return_value=mock_response)
+
+        result = await mock_client.update_purchase_order({
+            "ID": "po-abc-123",
+            "Supplier": "Acme Supplies",
+        })
+
+        assert mock_client._request.call_count == 1
+        call = mock_client._request.call_args
+        assert call[0][0] == "put"
+        assert call[0][1] == "Purchase"
+        assert result["ID"] == "po-abc-123"
+
+    async def test_updates_po_with_lines_two_step(self, mock_client):
+        """Should update PO header then replace order lines in two API calls."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "po-abc-123"}'
+        header_response.json.return_value = {
+            "ID": "po-abc-123",
+            "TaskID": "po-task-001",
+            "Supplier": "Acme Supplies",
+            "Status": "DRAFT",
+        }
+        header_response.headers = {}
+
+        order_response = MagicMock()
+        order_response.status_code = 200
+        order_response.text = '{"TaskID": "po-abc-123", "Lines": []}'
+        order_response.json.return_value = {
+            "TaskID": "po-abc-123",
+            "Status": "DRAFT",
+            "Lines": [{"ProductID": "prod-123", "SKU": "WIDGET-001", "Quantity": 20}],
+        }
+        order_response.headers = {}
+
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
+
+        payload = {
+            "ID": "po-abc-123",
+            "Supplier": "Acme Supplies",
+            "Lines": [
+                {
+                    "ProductID": "prod-abc-123",
+                    "SKU": "WIDGET-001",
+                    "Name": "Blue Widget",
+                    "Quantity": 20,
+                    "Price": 12.50,
+                    "Tax": 0,
+                    "TaxRule": "Tax Exempt",
+                    "Total": 250.00,
+                }
+            ],
+        }
+        result = await mock_client.update_purchase_order(payload)
+
+        assert mock_client._request.call_count == 2
+
+        # First call: PUT /Purchase (no Lines)
+        first_call = mock_client._request.call_args_list[0]
+        assert first_call[0][0] == "put"
+        assert first_call[0][1] == "Purchase"
+        first_body = first_call.kwargs.get("json", first_call[1].get("json", {}))
+        assert "Lines" not in first_body
+
+        # Second call: PUT /purchase/order with TaskID and Lines
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][0] == "put"
+        assert second_call[0][1] == "purchase/order"
+        second_body = second_call.kwargs.get("json", second_call[1].get("json", {}))
+        assert second_body.get("TaskID") == "po-abc-123"
+        assert "Lines" in second_body
+        assert len(second_body["Lines"]) == 1
+
+        assert "Order" in result
+
+    async def test_skips_lines_call_for_empty_list(self, mock_client):
+        """Empty Lines list should not trigger the lines PUT call."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"ID": "po-abc-123"}'
+        mock_response.json.return_value = {"ID": "po-abc-123"}
+        mock_response.headers = {}
+        mock_client._request = AsyncMock(return_value=mock_response)
+
+        await mock_client.update_purchase_order({"ID": "po-abc-123", "Lines": []})
+
+        assert mock_client._request.call_count == 1
+
+    async def test_raises_on_header_update_error(self, mock_client):
+        """Should raise Cin7ClientError when PUT /Purchase returns error."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.text = "Purchase Order not found"
+        mock_response.json.return_value = {"error": "not found"}
+        mock_response.headers = {}
+        mock_client._request = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(Cin7ClientError, match="Purchase Order update error"):
+            await mock_client.update_purchase_order({"ID": "po-bad-id"})
+
+    async def test_raises_on_lines_update_error_with_po_id(self, mock_client):
+        """Should raise Cin7ClientError with PO ID when lines PUT fails."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "po-abc-123"}'
+        header_response.json.return_value = {"ID": "po-abc-123"}
+        header_response.headers = {}
+
+        lines_error_response = MagicMock()
+        lines_error_response.status_code = 400
+        lines_error_response.text = "Invalid line data"
+        lines_error_response.json.return_value = {"error": "Invalid line data"}
+        lines_error_response.headers = {}
+
+        mock_client._request = AsyncMock(
+            side_effect=[header_response, lines_error_response]
+        )
+
+        payload = {
+            "ID": "po-abc-123",
+            "Lines": [{"ProductID": "prod-123", "SKU": "X", "Quantity": 1}],
+        }
+        with pytest.raises(Cin7ClientError, match="po-abc-123"):
+            await mock_client.update_purchase_order(payload)
 
 
 # ---------------------------------------------------------------------------
