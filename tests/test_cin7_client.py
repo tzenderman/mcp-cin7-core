@@ -2458,3 +2458,73 @@ class TestApiRequestContracts:
         assert call[0][1] == "product-suppliers", (
             "API path is 'product-suppliers' (kebab-case), not 'ProductSuppliers'"
         )
+
+    # ---- Update Sale with Lines ----
+
+    async def test_update_sale_header_uses_put_sale(self, mock_client):
+        """API docs: PUT /Sale — path is 'Sale', method is 'put'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/sale/sale/put
+        """
+        mock_client._request = AsyncMock(
+            return_value=self._ok_resp({"ID": "sale-123", "SaleID": "sale-123"})
+        )
+
+        await mock_client.update_sale({"SaleID": "sale-123", "Customer": "Test"})
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "put"
+        assert call[0][1] == "Sale"
+
+    async def test_update_sale_lines_uses_put_sale_order(self, mock_client):
+        """API docs: PUT /sale/order — path is 'sale/order' (lowercase), method is 'put'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/sale/sale-order/put
+        """
+        header_resp = self._ok_resp({"ID": "sale-123", "SaleID": "sale-123"})
+        lines_resp = self._ok_resp({"SaleID": "sale-123", "Lines": []})
+        mock_client._request = AsyncMock(side_effect=[header_resp, lines_resp])
+
+        await mock_client.update_sale({
+            "SaleID": "sale-123",
+            "Lines": [{"ProductID": "p", "SKU": "X", "Quantity": 1}],
+        })
+
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][0] == "put"
+        assert second_call[0][1] == "sale/order", "API path is 'sale/order' (lowercase)"
+
+    # ---- Update Purchase Order with Lines ----
+
+    async def test_update_purchase_order_header_uses_put_purchase(self, mock_client):
+        """API docs: PUT /Purchase — path is 'Purchase', method is 'put'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/purchase/purchase/put
+        """
+        mock_client._request = AsyncMock(
+            return_value=self._ok_resp({"ID": "po-123", "TaskID": "po-123"})
+        )
+
+        await mock_client.update_purchase_order({"ID": "po-123", "Supplier": "Acme"})
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "put"
+        assert call[0][1] == "Purchase"
+
+    async def test_update_purchase_order_lines_uses_put_purchase_order(self, mock_client):
+        """API docs: PUT /purchase/order — path is 'purchase/order' (lowercase), method is 'put'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/purchase/purchase-order/put
+        """
+        header_resp = self._ok_resp({"ID": "po-123", "TaskID": "po-123"})
+        lines_resp = self._ok_resp({"TaskID": "po-123", "Lines": []})
+        mock_client._request = AsyncMock(side_effect=[header_resp, lines_resp])
+
+        await mock_client.update_purchase_order({
+            "ID": "po-123",
+            "Lines": [{"ProductID": "p", "SKU": "X", "Quantity": 1}],
+        })
+
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][0] == "put"
+        assert second_call[0][1] == "purchase/order", "API path is 'purchase/order' (lowercase)"
