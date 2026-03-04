@@ -2535,9 +2535,9 @@ class TestApiRequestContracts:
     # ---- Update Purchase Order with Lines ----
 
     async def test_update_purchase_order_header_uses_put_purchase(self, mock_client):
-        """API docs: PUT /Purchase — path is 'Purchase', method is 'put'.
+        """API docs: PUT /advanced-purchase — path is 'advanced-purchase', method is 'put'.
 
-        See: https://dearinventory.docs.apiary.io/#reference/purchase/purchase/put
+        See: https://dearinventory.docs.apiary.io/#reference/purchase/advancedpurchase/put
         """
         mock_client._request = AsyncMock(
             return_value=self._ok_resp({"ID": "po-123", "TaskID": "po-123"})
@@ -2547,7 +2547,7 @@ class TestApiRequestContracts:
 
         call = mock_client._request.call_args
         assert call[0][0] == "put"
-        assert call[0][1] == "Purchase"
+        assert call[0][1] == "advanced-purchase"
 
     async def test_update_purchase_order_lines_uses_put_purchase_order(self, mock_client):
         """API docs: PUT /purchase/order — path is 'purchase/order' (lowercase), method is 'put'.

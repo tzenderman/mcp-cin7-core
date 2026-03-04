@@ -557,21 +557,18 @@ class Cin7Client:
         *,
         purchase_order_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Fetch a single purchase order by ID."""
+        """Fetch a single purchase order by ID via GET /advanced-purchase."""
         if not purchase_order_id:
             raise Cin7ClientError("get_purchase_order requires purchase_order_id")
 
         params: Dict[str, Any] = {"ID": purchase_order_id}
-        response = await self._request("get", "Purchase", params=params)
+        response = await self._request("get", "advanced-purchase", params=params)
         try:
             data = response.json()
         except Exception:
             data = {"raw": _truncate(response.text or "")}
 
         if response.status_code == 200 and isinstance(data, dict):
-            purchases = data.get("PurchaseList")
-            if isinstance(purchases, list) and purchases:
-                return purchases[0]
             if data:
                 return data
             raise Cin7ClientError("Purchase Order not found")
@@ -583,7 +580,7 @@ class Cin7Client:
     async def save_purchase_order(self, purchase_order: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new Purchase Order via two-step Cin7 API process.
 
-        1. POST to /Purchase - creates the base purchase header, returns TaskID
+        1. POST to /advanced-purchase - creates the base purchase header, returns ID
         2. POST to /purchase/order - adds order lines using the TaskID
 
         Status must be provided by the caller — no default is injected.
@@ -596,7 +593,7 @@ class Cin7Client:
         payload.pop("Order", None)
 
         # STEP 1: Create the base purchase header (without lines)
-        response = await self._request("post", "Purchase", json=payload)
+        response = await self._request("post", "advanced-purchase", json=payload)
         try:
             data = response.json()
         except Exception:
@@ -643,7 +640,7 @@ class Cin7Client:
         return data if isinstance(data, dict) else {"result": data}
 
     async def update_purchase_order(self, purchase_order: Dict[str, Any]) -> Dict[str, Any]:
-        """Update an existing Purchase Order via PUT Purchase, then optionally replace order lines.
+        """Update an existing Purchase Order via PUT /advanced-purchase, then optionally replace order lines.
 
         If 'Lines' is present and non-empty in the payload, a second PUT /purchase/order
         call replaces all existing order lines. An empty Lines list is ignored.
@@ -654,7 +651,7 @@ class Cin7Client:
         payload = dict(purchase_order)
         lines = payload.pop("Lines", None) or None  # treat [] as absent
 
-        response = await self._request("put", "Purchase", json=payload)
+        response = await self._request("put", "advanced-purchase", json=payload)
         try:
             data = response.json()
         except Exception:
