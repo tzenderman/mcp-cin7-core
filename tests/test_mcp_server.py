@@ -33,6 +33,11 @@ from tests.fixtures.stock_transfers import (
     STOCK_TRANSFER_LIST_RESPONSE,
     STOCK_TRANSFER_SINGLE,
 )
+from tests.fixtures.stock_adjustments import (
+    SA_LIST_RESPONSE,
+    SA_SINGLE,
+    SA_CREATE_RESPONSE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -2180,3 +2185,176 @@ class TestCreateProductSupplierEdgeCases:
 
         mock_instance.update_product_suppliers.assert_not_called()
         assert result["_suppliersRegistered"] is False
+
+
+# ---------------------------------------------------------------------------
+# TestCin7StockAdjustments
+# ---------------------------------------------------------------------------
+
+
+class TestCin7StockAdjustments:
+    """Tests for cin7_stock_adjustments tool."""
+
+    @pytest.mark.asyncio
+    async def test_calls_list_stock_adjustments(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_stock_adjustments = AsyncMock(
+            return_value=copy.deepcopy(SA_LIST_RESPONSE)
+        )
+
+        from cin7_core_server.resources.stock import cin7_stock_adjustments
+
+        result = await cin7_stock_adjustments(status="DRAFT", page=2, limit=50)
+
+        mock_instance.list_stock_adjustments.assert_called_once_with(
+            status="DRAFT", page=2, limit=50
+        )
+
+    @pytest.mark.asyncio
+    async def test_default_projection_keeps_taskid_and_status(self, mock_cin7_class):
+        """Default projection: TaskID and Status only."""
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_stock_adjustments = AsyncMock(
+            return_value=copy.deepcopy(SA_LIST_RESPONSE)
+        )
+
+        from cin7_core_server.resources.stock import cin7_stock_adjustments
+
+        result = await cin7_stock_adjustments()
+
+        items = result["results"]
+        for item in items:
+            assert "TaskID" in item
+            assert "Status" in item
+            # Extra fields stripped by default
+            assert "EffectiveDate" not in item
+            assert "Account" not in item
+
+    @pytest.mark.asyncio
+    async def test_extra_fields_preserved_with_fields_param(self, mock_cin7_class):
+        """Requesting extra fields should add them alongside base fields."""
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_stock_adjustments = AsyncMock(
+            return_value=copy.deepcopy(SA_LIST_RESPONSE)
+        )
+
+        from cin7_core_server.resources.stock import cin7_stock_adjustments
+
+        result = await cin7_stock_adjustments(fields=["EffectiveDate", "Reference"])
+
+        items = result["results"]
+        for item in items:
+            assert "TaskID" in item
+            assert "Status" in item
+            assert "EffectiveDate" in item
+            assert "Reference" in item
+
+    @pytest.mark.asyncio
+    async def test_result_has_pagination_fields(self, mock_cin7_class):
+        """Result should have results, has_more, cursor, total_returned."""
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_stock_adjustments = AsyncMock(
+            return_value=copy.deepcopy(SA_LIST_RESPONSE)
+        )
+
+        from cin7_core_server.resources.stock import cin7_stock_adjustments
+
+        result = await cin7_stock_adjustments()
+
+        assert "results" in result
+        assert "has_more" in result
+        assert "total_returned" in result
+
+
+# ---------------------------------------------------------------------------
+# TestCin7GetStockAdjustment
+# ---------------------------------------------------------------------------
+
+
+class TestCin7GetStockAdjustment:
+    """Tests for cin7_get_stock_adjustment tool."""
+
+    @pytest.mark.asyncio
+    async def test_delegates_to_get_stock_adjustment(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_stock_adjustment = AsyncMock(return_value=SA_SINGLE)
+
+        from cin7_core_server.resources.stock import cin7_get_stock_adjustment
+
+        result = await cin7_get_stock_adjustment(task_id="sa-task-001")
+
+        mock_instance.get_stock_adjustment.assert_called_once_with(task_id="sa-task-001")
+        assert result["TaskID"] == "sa-task-001"
+
+
+# ---------------------------------------------------------------------------
+# TestCin7CreateStockAdjustment
+# ---------------------------------------------------------------------------
+
+
+class TestCin7CreateStockAdjustment:
+    """Tests for cin7_create_stock_adjustment tool."""
+
+    @pytest.mark.asyncio
+    async def test_delegates_to_create_stock_adjustment(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.create_stock_adjustment = AsyncMock(return_value=SA_CREATE_RESPONSE)
+
+        from cin7_core_server.resources.stock import cin7_create_stock_adjustment
+
+        payload = {
+            "EffectiveDate": "2026-03-05",
+            "Lines": [
+                {
+                    "ProductID": "prod-abc-123",
+                    "SKU": "WIDGET-001",
+                    "ProductName": "Blue Widget",
+                    "Quantity": 5,
+                    "UnitCost": 12.50,
+                    "Location": "Main Warehouse",
+                }
+            ],
+        }
+        result = await cin7_create_stock_adjustment(payload)
+
+        mock_instance.create_stock_adjustment.assert_called_once_with(payload)
+        assert result["TaskID"] == "sa-task-new-789"
+
+    @pytest.mark.asyncio
+    async def test_api_contract_required_fields(self, mock_cin7_class):
+        """Payload forwarded unchanged — required fields: EffectiveDate, Lines.
+
+        API docs: POST /stockadjustment
+        See: https://dearinventory.docs.apiary.io/#reference/stock/stock-adjustment/post
+        """
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.create_stock_adjustment = AsyncMock(return_value=SA_CREATE_RESPONSE)
+
+        from cin7_core_server.resources.stock import cin7_create_stock_adjustment
+
+        payload = {
+            "EffectiveDate": "2026-03-05",
+            "Status": "DRAFT",
+            "UpdateOnHand": True,
+            "Account": "Cost of Goods Sold",
+            "Reference": "ADJ-2026-001",
+            "Lines": [
+                {
+                    "ProductID": "prod-abc-123",
+                    "SKU": "WIDGET-001",
+                    "ProductName": "Blue Widget",
+                    "Quantity": 10,
+                    "UnitCost": 12.50,
+                    "Location": "Main Warehouse",
+                    "LocationID": None,
+                    "BatchSN": None,
+                    "ExpiryDate": None,
+                    "ReceivedDate": None,
+                    "Comments": "Cycle count adjustment",
+                }
+            ],
+        }
+
+        await cin7_create_stock_adjustment(payload)
+
+        mock_instance.create_stock_adjustment.assert_called_once_with(payload)
