@@ -712,6 +712,78 @@ class Cin7Client:
             f"Stock Transfer list error: {response.status_code} {response.text[:200]}"
         )
 
+    async def list_stock_adjustments(
+        self,
+        *,
+        status: Optional[str] = None,
+        page: int = 1,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        """List stock adjustments via GET /stockadjustmentList."""
+        params: Dict[str, Any] = {"Page": page, "Limit": limit}
+        if status:
+            params["Status"] = status
+        response = await self._request("get", "stockadjustmentList", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+        if response.status_code == 200:
+            return data if isinstance(data, dict) else {"result": data}
+        raise Cin7ClientError(
+            f"Stock Adjustment list error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def get_stock_adjustment(
+        self,
+        *,
+        task_id: str,
+    ) -> Dict[str, Any]:
+        """Fetch a single stock adjustment by TaskID via GET /stockadjustment."""
+        if not task_id:
+            raise Cin7ClientError("get_stock_adjustment requires task_id")
+
+        params: Dict[str, Any] = {"TaskID": task_id}
+        response = await self._request("get", "stockadjustment", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            if data:
+                return data
+            raise Cin7ClientError("Stock Adjustment not found")
+
+        raise Cin7ClientError(
+            f"Stock Adjustment get error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def create_stock_adjustment(
+        self,
+        stock_adjustment: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Create a stock adjustment via POST /stockadjustment.
+
+        Unlike Purchase Orders and Sales, lines are included inline in the body —
+        no second API call needed.
+        """
+        response = await self._request("post", "stockadjustment", json=stock_adjustment)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code in (200, 201):
+            task_id = data.get("TaskID") if isinstance(data, dict) else None
+            if not task_id:
+                raise Cin7ClientError("No TaskID returned from stock adjustment creation")
+            return data
+
+        raise Cin7ClientError(
+            f"Stock Adjustment creation error: {response.status_code} {response.text[:500]}"
+        )
+
     async def get_product_suppliers(
         self,
         *,
