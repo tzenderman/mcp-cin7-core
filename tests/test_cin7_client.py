@@ -52,6 +52,11 @@ from tests.fixtures.stock_transfers import (
     STOCK_TRANSFER_SINGLE,
     STOCK_TRANSFER_NOT_FOUND_400,
 )
+from tests.fixtures.stock_adjustments import (
+    SA_LIST_RESPONSE,
+    SA_SINGLE,
+    SA_CREATE_RESPONSE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -2566,3 +2571,73 @@ class TestApiRequestContracts:
         second_call = mock_client._request.call_args_list[1]
         assert second_call[0][0] == "put"
         assert second_call[0][1] == "purchase/order", "API path is 'purchase/order' (lowercase)"
+
+    # ---- Stock Adjustments ----
+
+    async def test_list_stock_adjustments_path_is_stockadjustmentlist_lowercase(self, mock_client):
+        """API docs: GET /stockadjustmentList (camelCase) — not 'StockAdjustmentList'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/stock/stock-adjustment-list/get
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(SA_LIST_RESPONSE))
+
+        await mock_client.list_stock_adjustments()
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "get"
+        assert call[0][1] == "stockadjustmentList", (
+            "API path is 'stockadjustmentList' (camelCase), not 'StockAdjustmentList'"
+        )
+
+    async def test_list_stock_adjustments_default_page_and_limit(self, mock_client):
+        """API docs: GET /stockadjustmentList — default Page=1, Limit=100."""
+        mock_client._request = AsyncMock(return_value=self._ok_resp(SA_LIST_RESPONSE))
+
+        await mock_client.list_stock_adjustments()
+
+        params = mock_client._request.call_args.kwargs.get("params", {})
+        assert params["Page"] == 1
+        assert params["Limit"] == 100
+
+    async def test_list_stock_adjustments_status_param_is_capitalized(self, mock_client):
+        """API docs: GET /stockadjustmentList?Status=DRAFT — param is 'Status' (capital S)."""
+        mock_client._request = AsyncMock(return_value=self._ok_resp(SA_LIST_RESPONSE))
+
+        await mock_client.list_stock_adjustments(status="DRAFT")
+
+        params = mock_client._request.call_args.kwargs.get("params", {})
+        assert params["Status"] == "DRAFT"
+        assert "status" not in params, "Param must be 'Status' (capital S), not 'status'"
+
+    async def test_get_stock_adjustment_path_is_stockadjustment(self, mock_client):
+        """API docs: GET /stockadjustment?TaskID=... — path is 'stockadjustment' (all lowercase).
+
+        See: https://dearinventory.docs.apiary.io/#reference/stock/stock-adjustment/get
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(SA_SINGLE))
+
+        await mock_client.get_stock_adjustment(task_id="sa-task-001")
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "get"
+        assert call[0][1] == "stockadjustment", (
+            "API path is 'stockadjustment' (all lowercase)"
+        )
+        params = call.kwargs.get("params", call[1].get("params", {}))
+        assert params["TaskID"] == "sa-task-001"
+
+    async def test_create_stock_adjustment_path_is_stockadjustment_post(self, mock_client):
+        """API docs: POST /stockadjustment — same path as GET, different method.
+
+        See: https://dearinventory.docs.apiary.io/#reference/stock/stock-adjustment/post
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(SA_CREATE_RESPONSE))
+
+        await mock_client.create_stock_adjustment({
+            "EffectiveDate": "2026-03-05",
+            "Lines": [{"SKU": "WIDGET-001"}],
+        })
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "post"
+        assert call[0][1] == "stockadjustment"
