@@ -195,8 +195,8 @@ async def cin7_get_stock_transfer(
 
 async def cin7_stock_adjustments(
     status: str | None = None,
-    page: int = 1,
     limit: int = 100,
+    cursor: str | None = None,
     fields: list[str] | None = None,
 ) -> Dict[str, Any]:
     """List stock adjustments with optional status filter.
@@ -206,8 +206,8 @@ async def cin7_stock_adjustments(
 
     Parameters:
     - status: Filter by status (DRAFT, COMPLETED, VOIDED)
-    - page: Page number (default 1)
     - limit: Items per page (default 100)
+    - cursor: Opaque cursor for next page (pass from previous response)
     - fields: Additional fields beyond defaults, or ["*"] for all fields
       WARNING: ["*"] returns every field on every item — can produce very large responses
       and consume many tokens. Prefer listing only the fields you need.
@@ -215,9 +215,10 @@ async def cin7_stock_adjustments(
     Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-adjustment-list/get
     """
     logger.debug(
-        "Tool call: cin7_stock_adjustments(status=%s, page=%s, limit=%s, fields=%s)",
-        status, page, limit, fields,
+        "Tool call: cin7_stock_adjustments(status=%s, limit=%s, cursor=%s, fields=%s)",
+        status, limit, cursor, fields,
     )
+    page = int(cursor) if cursor else 1
     client = Cin7Client.from_env()
     raw = await client.list_stock_adjustments(status=status, page=page, limit=limit)
 

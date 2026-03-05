@@ -2204,7 +2204,7 @@ class TestCin7StockAdjustments:
 
         from cin7_core_server.resources.stock import cin7_stock_adjustments
 
-        result = await cin7_stock_adjustments(status="DRAFT", page=2, limit=50)
+        result = await cin7_stock_adjustments(status="DRAFT", cursor="2", limit=50)
 
         mock_instance.list_stock_adjustments.assert_called_once_with(
             status="DRAFT", page=2, limit=50
