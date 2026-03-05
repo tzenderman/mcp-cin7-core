@@ -191,3 +191,98 @@ async def cin7_get_stock_transfer(
 
     logger.debug("Tool result: cin7_get_stock_transfer -> %s", truncate(str(result)))
     return result
+
+
+async def cin7_stock_adjustments(
+    status: str | None = None,
+    page: int = 1,
+    limit: int = 100,
+    fields: list[str] | None = None,
+) -> Dict[str, Any]:
+    """List stock adjustments with optional status filter.
+
+    Default fields: TaskID, Status
+    Optional fields: EffectiveDate, Account, Reference, UpdateOnHand, Lines, Total
+
+    Parameters:
+    - status: Filter by status (DRAFT, COMPLETED, VOIDED)
+    - page: Page number (default 1)
+    - limit: Items per page (default 100)
+    - fields: Additional fields beyond defaults, or ["*"] for all fields
+      WARNING: ["*"] returns every field on every item — can produce very large responses
+      and consume many tokens. Prefer listing only the fields you need.
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-adjustment-list/get
+    """
+    logger.debug(
+        "Tool call: cin7_stock_adjustments(status=%s, page=%s, limit=%s, fields=%s)",
+        status, page, limit, fields,
+    )
+    client = Cin7Client.from_env()
+    raw = await client.list_stock_adjustments(status=status, page=page, limit=limit)
+
+    items = raw.get("StockAdjustmentList", [])
+    total = raw.get("Total", len(items))
+
+    base_fields = {"TaskID", "Status"}
+    items = project_items(items, fields, base_fields=base_fields)
+
+    has_more = (page * limit) < total
+    result = {
+        "results": items,
+        "has_more": has_more,
+        "cursor": str(page + 1) if has_more else None,
+        "total_returned": len(items),
+    }
+    logger.debug("Tool result: cin7_stock_adjustments -> %s", truncate(str(result)))
+    return result
+
+
+async def cin7_get_stock_adjustment(task_id: str) -> Dict[str, Any]:
+    """Get a single stock adjustment by TaskID.
+
+    Returns the complete stock adjustment object including Lines.
+
+    Parameters:
+    - task_id: Stock adjustment task ID (required)
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-adjustment/get
+    """
+    logger.debug("Tool call: cin7_get_stock_adjustment(task_id=%s)", task_id)
+    client = Cin7Client.from_env()
+    result = await client.get_stock_adjustment(task_id=task_id)
+    logger.debug("Tool result: cin7_get_stock_adjustment -> %s", truncate(str(result)))
+    return result
+
+
+async def cin7_create_stock_adjustment(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a stock adjustment.
+
+    Required fields:
+    - EffectiveDate: DateTime string (e.g. "2026-03-05")
+    - Lines: List of line items (see below)
+
+    Each line item:
+    - ProductID: Product GUID (from cin7_get_product)
+    - SKU: Product SKU
+    - ProductName: Product name
+    - Quantity: Adjustment quantity (positive to add, negative to subtract)
+    - UnitCost: Unit cost
+    - Location: Warehouse location name (or use LocationID)
+
+    Optional fields:
+    - Status: DRAFT (default) or COMPLETED
+    - UpdateOnHand: true = adjust OnHand quantity (default), false = adjust Available
+    - Account: GL account name
+    - Reference: Reference number or label
+    - Lines[*].BatchSN, ExpiryDate, ReceivedDate, Comments
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-adjustment/post
+    """
+    logger.debug(
+        "Tool call: cin7_create_stock_adjustment(payload=%s)", truncate(str(payload))
+    )
+    client = Cin7Client.from_env()
+    result = await client.create_stock_adjustment(payload)
+    logger.debug("Tool result: cin7_create_stock_adjustment -> %s", truncate(str(result)))
+    return result

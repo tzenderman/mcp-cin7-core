@@ -68,6 +68,9 @@ def create_mcp_server(auth=None):
     mcp.tool()(stock.cin7_get_stock)
     mcp.tool()(stock.cin7_stock_transfers)
     mcp.tool()(stock.cin7_get_stock_transfer)
+    mcp.tool()(stock.cin7_stock_adjustments)
+    mcp.tool()(stock.cin7_get_stock_adjustment)
+    mcp.tool()(stock.cin7_create_stock_adjustment)
 
     # -- Tools: product snapshots -------------------------------------------
     mcp.tool()(snapshots.cin7_products_snapshot_start)
