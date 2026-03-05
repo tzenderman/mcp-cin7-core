@@ -952,6 +952,195 @@ class TestGetStockTransfer:
 
 
 # ---------------------------------------------------------------------------
+# TestListStockAdjustments
+# ---------------------------------------------------------------------------
+
+
+class TestListStockAdjustments:
+    """Tests for list_stock_adjustments method."""
+
+    async def test_success_returns_adjustment_list(self, mock_client):
+        """Should return StockAdjustmentList on success."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = SA_LIST_RESPONSE
+        mock_resp.text = str(SA_LIST_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.list_stock_adjustments()
+
+        assert "StockAdjustmentList" in result
+        assert len(result["StockAdjustmentList"]) == 2
+        assert result["Total"] == 2
+
+    async def test_status_filter_sent_as_param(self, mock_client):
+        """Should pass Status param when status filter provided."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = SA_LIST_RESPONSE
+        mock_resp.text = str(SA_LIST_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        await mock_client.list_stock_adjustments(status="DRAFT")
+
+        call_args = mock_client._request.call_args
+        params = call_args.kwargs.get("params", call_args[1].get("params", {}))
+        assert params["Status"] == "DRAFT"
+
+    async def test_no_status_filter_omits_status_param(self, mock_client):
+        """Should NOT send Status param when no filter provided."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = SA_LIST_RESPONSE
+        mock_resp.text = str(SA_LIST_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        await mock_client.list_stock_adjustments()
+
+        call_args = mock_client._request.call_args
+        params = call_args.kwargs.get("params", call_args[1].get("params", {}))
+        assert "Status" not in params
+
+    async def test_api_error_raises(self, mock_client):
+        """Should raise Cin7ClientError on API error."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.json.return_value = {"error": "Server Error"}
+        mock_resp.text = "Server Error"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Stock Adjustment list error"):
+            await mock_client.list_stock_adjustments()
+
+
+# ---------------------------------------------------------------------------
+# TestGetStockAdjustment
+# ---------------------------------------------------------------------------
+
+
+class TestGetStockAdjustment:
+    """Tests for get_stock_adjustment method."""
+
+    async def test_success_returns_flat_object(self, mock_client):
+        """Should return the flat adjustment object (no wrapper list)."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = SA_SINGLE
+        mock_resp.text = str(SA_SINGLE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.get_stock_adjustment(task_id="sa-task-001")
+
+        assert result["TaskID"] == "sa-task-001"
+        assert result["Status"] == "COMPLETED"
+        call_args = mock_client._request.call_args
+        params = call_args.kwargs.get("params", call_args[1].get("params", {}))
+        assert params["TaskID"] == "sa-task-001"
+
+    async def test_missing_task_id_raises(self, mock_client):
+        """Should raise Cin7ClientError when task_id is not provided."""
+        with pytest.raises(Cin7ClientError, match="requires task_id"):
+            await mock_client.get_stock_adjustment(task_id="")
+
+    async def test_200_with_empty_dict_raises_not_found(self, mock_client):
+        """Should raise Cin7ClientError when 200 returns empty body."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {}
+        mock_resp.text = "{}"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Stock Adjustment not found"):
+            await mock_client.get_stock_adjustment(task_id="nonexistent")
+
+    async def test_api_error_raises(self, mock_client):
+        """Should raise Cin7ClientError on non-200 response."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.json.return_value = [{"Exception": "Not found"}]
+        mock_resp.text = '[{"Exception": "Not found"}]'
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Stock Adjustment get error"):
+            await mock_client.get_stock_adjustment(task_id="bad-id")
+
+
+# ---------------------------------------------------------------------------
+# TestCreateStockAdjustment
+# ---------------------------------------------------------------------------
+
+
+class TestCreateStockAdjustment:
+    """Tests for create_stock_adjustment method."""
+
+    async def test_success_returns_adjustment_with_task_id(self, mock_client):
+        """Should return adjustment object with TaskID on success."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = SA_CREATE_RESPONSE
+        mock_resp.text = str(SA_CREATE_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        payload = {
+            "EffectiveDate": "2026-03-05",
+            "Lines": [
+                {
+                    "ProductID": "prod-abc-123",
+                    "SKU": "WIDGET-001",
+                    "ProductName": "Blue Widget",
+                    "Quantity": 5,
+                    "UnitCost": 12.50,
+                    "Location": "Main Warehouse",
+                }
+            ],
+        }
+        result = await mock_client.create_stock_adjustment(payload)
+
+        assert result["TaskID"] == "sa-task-new-789"
+        assert result["Status"] == "DRAFT"
+
+    async def test_payload_forwarded_as_json(self, mock_client):
+        """Should forward the payload as JSON body to POST /stockadjustment."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = SA_CREATE_RESPONSE
+        mock_resp.text = str(SA_CREATE_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        payload = {
+            "EffectiveDate": "2026-03-05",
+            "Lines": [{"SKU": "X"}],
+        }
+        await mock_client.create_stock_adjustment(payload)
+
+        call_args = mock_client._request.call_args
+        sent_json = call_args.kwargs.get("json", call_args[1].get("json", {}))
+        assert sent_json == payload
+
+    async def test_missing_task_id_in_response_raises(self, mock_client):
+        """Should raise Cin7ClientError when response has no TaskID."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"Status": "DRAFT"}  # No TaskID
+        mock_resp.text = str({"Status": "DRAFT"})
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="No TaskID returned"):
+            await mock_client.create_stock_adjustment({"EffectiveDate": "2026-03-05", "Lines": []})
+
+    async def test_api_error_raises(self, mock_client):
+        """Should raise Cin7ClientError on non-200/201 response."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.json.return_value = [{"ErrorCode": 400, "Exception": "Missing EffectiveDate"}]
+        mock_resp.text = "Missing EffectiveDate"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Stock Adjustment creation error"):
+            await mock_client.create_stock_adjustment({"Lines": []})
+
+
+# ---------------------------------------------------------------------------
 # TestGetProductSuppliers
 # ---------------------------------------------------------------------------
 
