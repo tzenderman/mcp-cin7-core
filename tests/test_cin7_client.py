@@ -57,6 +57,12 @@ from tests.fixtures.stock_adjustments import (
     SA_SINGLE,
     SA_CREATE_RESPONSE,
 )
+from tests.fixtures.customers import (
+    CUSTOMER_LIST_RESPONSE,
+    CUSTOMER_SINGLE,
+    CUSTOMER_SAVE_RESPONSE,
+    CUSTOMER_UPDATE_RESPONSE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -2830,3 +2836,84 @@ class TestApiRequestContracts:
         call = mock_client._request.call_args
         assert call[0][0] == "post"
         assert call[0][1] == "stockadjustment"
+
+    # ---- Customer ----
+
+    async def test_list_customers_path_is_customer_lowercase(self, mock_client):
+        """API docs: GET /customer (lowercase) — not 'Customer'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/customer/customer/get
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(CUSTOMER_LIST_RESPONSE))
+
+        await mock_client.list_customers()
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "get"
+        assert call[0][1] == "customer", "API path is 'customer' (lowercase), not 'Customer'"
+
+    async def test_list_customers_default_page_and_limit(self, mock_client):
+        """API docs: GET /customer — default Page=1, Limit=100."""
+        mock_client._request = AsyncMock(return_value=self._ok_resp(CUSTOMER_LIST_RESPONSE))
+
+        await mock_client.list_customers()
+
+        params = mock_client._request.call_args.kwargs.get("params", {})
+        assert params["Page"] == 1
+        assert params["Limit"] == 100
+
+    async def test_list_customers_name_filter_param_is_name_capitalized(self, mock_client):
+        """API docs: GET /customer?Name=... — param is 'Name' (capital N).
+
+        See: https://dearinventory.docs.apiary.io/#reference/customer/customer/get
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(CUSTOMER_LIST_RESPONSE))
+
+        await mock_client.list_customers(name="Acme")
+
+        params = mock_client._request.call_args.kwargs.get("params", {})
+        assert params["Name"] == "Acme"
+        assert "name" not in params
+
+    async def test_get_customer_path_is_customer_lowercase(self, mock_client):
+        """API docs: GET /customer?ID=... — path is 'customer', param is 'ID'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/customer/customer/get
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(
+            {"CustomerList": [CUSTOMER_SINGLE], "Total": 1}
+        ))
+
+        await mock_client.get_customer(customer_id="cust-abc-123")
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "get"
+        assert call[0][1] == "customer"
+        params = call.kwargs.get("params", call[1].get("params", {}))
+        assert params["ID"] == "cust-abc-123"
+
+    async def test_save_customer_path_is_customer_post(self, mock_client):
+        """API docs: POST /customer — path is 'customer', method is 'post'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/customer/customer/post
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(CUSTOMER_SAVE_RESPONSE))
+
+        await mock_client.save_customer({"Name": "New Customer"})
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "post"
+        assert call[0][1] == "customer"
+
+    async def test_update_customer_path_is_customer_put(self, mock_client):
+        """API docs: PUT /customer — path is 'customer', method is 'put'.
+
+        See: https://dearinventory.docs.apiary.io/#reference/customer/customer/put
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(CUSTOMER_UPDATE_RESPONSE))
+
+        await mock_client.update_customer({"ID": "cust-abc-123", "Name": "Updated"})
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "put"
+        assert call[0][1] == "customer"
