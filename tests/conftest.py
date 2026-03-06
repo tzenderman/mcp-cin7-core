@@ -45,6 +45,7 @@ _RESOURCE_MODULES = [
     "cin7_core_server.resources.auth",
     "cin7_core_server.resources.products",
     "cin7_core_server.resources.suppliers",
+    "cin7_core_server.resources.customers",
     "cin7_core_server.resources.sales",
     "cin7_core_server.resources.purchase_orders",
     "cin7_core_server.resources.stock",

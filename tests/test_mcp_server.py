@@ -38,6 +38,16 @@ from tests.fixtures.stock_adjustments import (
     SA_SINGLE,
     SA_CREATE_RESPONSE,
 )
+from tests.fixtures.customers import (
+    CUSTOMER_LIST_RESPONSE,
+    CUSTOMER_SINGLE,
+    CUSTOMER_SAVE_RESPONSE,
+    CUSTOMER_UPDATE_RESPONSE,
+)
+from tests.fixtures.stock_transfer_orders import (
+    STO_SINGLE,
+    STO_CREATE_RESPONSE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -2358,3 +2368,288 @@ class TestCin7CreateStockAdjustment:
         await cin7_create_stock_adjustment(payload)
 
         mock_instance.create_stock_adjustment.assert_called_once_with(payload)
+
+
+# ---------------------------------------------------------------------------
+# TestCin7Customers
+# ---------------------------------------------------------------------------
+
+
+class TestCin7Customers:
+    """Tests for cin7_customers tool."""
+
+    @pytest.mark.asyncio
+    async def test_calls_list_customers(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_customers = AsyncMock(return_value=CUSTOMER_LIST_RESPONSE)
+
+        from cin7_core_server.resources.customers import cin7_customers
+
+        result = await cin7_customers()
+
+        mock_instance.list_customers.assert_called_once_with(page=1, limit=100, name=None)
+        assert result["total_returned"] == 2
+
+    @pytest.mark.asyncio
+    async def test_default_projection_id_and_name_only(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_customers = AsyncMock(return_value=CUSTOMER_LIST_RESPONSE)
+
+        from cin7_core_server.resources.customers import cin7_customers
+
+        result = await cin7_customers()
+
+        item = result["results"][0]
+        assert "ID" in item
+        assert "Name" in item
+        assert "Email" not in item
+        assert "Phone" not in item
+
+    @pytest.mark.asyncio
+    async def test_extra_fields_included(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_customers = AsyncMock(return_value=CUSTOMER_LIST_RESPONSE)
+
+        from cin7_core_server.resources.customers import cin7_customers
+
+        result = await cin7_customers(fields=["Email"])
+
+        item = result["results"][0]
+        assert "ID" in item
+        assert "Name" in item
+        assert "Email" in item
+        assert "Phone" not in item
+
+    @pytest.mark.asyncio
+    async def test_paginated_shape(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_customers = AsyncMock(return_value=CUSTOMER_LIST_RESPONSE)
+
+        from cin7_core_server.resources.customers import cin7_customers
+
+        result = await cin7_customers(limit=100)
+
+        assert "results" in result
+        assert "has_more" in result
+        assert "cursor" in result
+        assert "total_returned" in result
+
+    @pytest.mark.asyncio
+    async def test_cursor_passthrough(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.list_customers = AsyncMock(return_value=CUSTOMER_LIST_RESPONSE)
+
+        from cin7_core_server.resources.customers import cin7_customers
+
+        await cin7_customers(cursor="3")
+
+        mock_instance.list_customers.assert_called_once_with(page=3, limit=100, name=None)
+
+
+# ---------------------------------------------------------------------------
+# TestCin7GetCustomer
+# ---------------------------------------------------------------------------
+
+
+class TestCin7GetCustomer:
+    """Tests for cin7_get_customer tool."""
+
+    @pytest.mark.asyncio
+    async def test_calls_get_with_all_fields(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_customer = AsyncMock(return_value=CUSTOMER_SINGLE)
+
+        from cin7_core_server.resources.customers import cin7_get_customer
+
+        result = await cin7_get_customer(customer_id="cust-abc-123", fields=["*"])
+
+        mock_instance.get_customer.assert_called_once_with(customer_id="cust-abc-123", name=None)
+        assert "Email" in result
+        assert "PaymentTerm" in result
+
+    @pytest.mark.asyncio
+    async def test_default_projection_id_and_name_only(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_customer = AsyncMock(return_value=CUSTOMER_SINGLE)
+
+        from cin7_core_server.resources.customers import cin7_get_customer
+
+        result = await cin7_get_customer(customer_id="cust-abc-123")
+
+        assert "ID" in result
+        assert "Name" in result
+        assert "Email" not in result
+
+
+# ---------------------------------------------------------------------------
+# TestCin7CreateCustomer
+# ---------------------------------------------------------------------------
+
+
+class TestCin7CreateCustomer:
+    """Tests for cin7_create_customer tool."""
+
+    @pytest.mark.asyncio
+    async def test_calls_save_customer(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.save_customer = AsyncMock(return_value=CUSTOMER_SAVE_RESPONSE)
+
+        from cin7_core_server.resources.customers import cin7_create_customer
+
+        payload = {"Name": "New Customer"}
+        result = await cin7_create_customer(payload)
+
+        mock_instance.save_customer.assert_called_once_with(payload)
+        assert result["ID"] == "cust-new-789"
+
+    @pytest.mark.asyncio
+    async def test_api_contract_required_fields(self, mock_cin7_class):
+        """Payload forwarded unchanged — required fields: Name, Currency, PaymentTerm, AccountReceivable, TaxRule.
+
+        API docs: POST /customer
+        See: https://dearinventory.docs.apiary.io/#reference/customer/customer/post
+        """
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.save_customer = AsyncMock(return_value=CUSTOMER_SAVE_RESPONSE)
+
+        from cin7_core_server.resources.customers import cin7_create_customer
+
+        payload = {
+            "Name": "New Customer",
+            "Currency": "USD",
+            "PaymentTerm": "Net 30",
+            "AccountReceivable": "120",
+            "TaxRule": "Tax Exempt",
+            "Email": "contact@new.com",
+            "Phone": "555-0300",
+            "Status": "Active",
+        }
+
+        await cin7_create_customer(payload)
+
+        mock_instance.save_customer.assert_called_once_with(payload)
+
+
+# ---------------------------------------------------------------------------
+# TestCin7UpdateCustomer
+# ---------------------------------------------------------------------------
+
+
+class TestCin7UpdateCustomer:
+    """Tests for cin7_update_customer tool."""
+
+    @pytest.mark.asyncio
+    async def test_calls_update_customer(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.update_customer = AsyncMock(return_value=CUSTOMER_UPDATE_RESPONSE)
+
+        from cin7_core_server.resources.customers import cin7_update_customer
+
+        payload = {"ID": "cust-abc-123", "Name": "Updated"}
+        result = await cin7_update_customer(payload)
+
+        mock_instance.update_customer.assert_called_once_with(payload)
+        assert result["Name"] == "Acme Corp Updated"
+
+
+# ---------------------------------------------------------------------------
+# TestCin7GetStockTransferOrder
+# ---------------------------------------------------------------------------
+
+
+class TestCin7GetStockTransferOrder:
+    """Tests for cin7_get_stock_transfer_order tool."""
+
+    @pytest.mark.asyncio
+    async def test_calls_get_with_all_fields(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_stock_transfer_order = AsyncMock(return_value=STO_SINGLE)
+
+        from cin7_core_server.resources.stock import cin7_get_stock_transfer_order
+
+        result = await cin7_get_stock_transfer_order(task_id="sto-task-001", fields=["*"])
+
+        mock_instance.get_stock_transfer_order.assert_called_once_with(task_id="sto-task-001")
+        assert "Lines" in result
+        assert "Status" in result
+
+    @pytest.mark.asyncio
+    async def test_default_projection_taskid_from_to_only(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_stock_transfer_order = AsyncMock(return_value=STO_SINGLE)
+
+        from cin7_core_server.resources.stock import cin7_get_stock_transfer_order
+
+        result = await cin7_get_stock_transfer_order(task_id="sto-task-001")
+
+        assert "TaskID" in result
+        assert "FromLocation" in result
+        assert "ToLocation" in result
+        assert "Status" not in result
+        assert "Lines" not in result
+
+    @pytest.mark.asyncio
+    async def test_fields_projection_adds_status_and_lines(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_stock_transfer_order = AsyncMock(return_value=STO_SINGLE)
+
+        from cin7_core_server.resources.stock import cin7_get_stock_transfer_order
+
+        result = await cin7_get_stock_transfer_order(task_id="sto-task-001", fields=["Status", "Lines"])
+
+        assert "TaskID" in result
+        assert "Status" in result
+        assert "Lines" in result
+
+
+# ---------------------------------------------------------------------------
+# TestCin7SaveStockTransferOrder
+# ---------------------------------------------------------------------------
+
+
+class TestCin7SaveStockTransferOrder:
+    """Tests for cin7_save_stock_transfer_order tool."""
+
+    @pytest.mark.asyncio
+    async def test_calls_save_stock_transfer_order(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.save_stock_transfer_order = AsyncMock(return_value=STO_CREATE_RESPONSE)
+
+        from cin7_core_server.resources.stock import cin7_save_stock_transfer_order
+
+        payload = {"FromLocation": "Main Warehouse", "ToLocation": "Store Front"}
+        result = await cin7_save_stock_transfer_order(payload)
+
+        mock_instance.save_stock_transfer_order.assert_called_once_with(payload)
+        assert result["TaskID"] == "sto-new-789"
+
+    @pytest.mark.asyncio
+    async def test_api_contract_required_fields(self, mock_cin7_class):
+        """Payload forwarded unchanged — required fields: FromLocation, ToLocation, Lines.
+
+        API docs: POST /stockTransferOrder
+        See: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer-order/post
+        """
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.save_stock_transfer_order = AsyncMock(return_value=STO_CREATE_RESPONSE)
+
+        from cin7_core_server.resources.stock import cin7_save_stock_transfer_order
+
+        payload = {
+            "FromLocation": "Main Warehouse",
+            "ToLocation": "Store Front",
+            "Status": "DRAFT",
+            "TransferDate": "2026-03-05",
+            "Lines": [
+                {
+                    "ProductID": "prod-abc-123",
+                    "SKU": "WIDGET-001",
+                    "ProductName": "Blue Widget",
+                    "TransferQuantity": 5.0,
+                }
+            ],
+        }
+
+        await cin7_save_stock_transfer_order(payload)
+
+        mock_instance.save_stock_transfer_order.assert_called_once_with(payload)
