@@ -8,6 +8,7 @@ from .resources import (
     auth as auth_tools,
     products,
     suppliers,
+    customers,
     sales,
     purchase_orders,
     stock,
@@ -51,6 +52,12 @@ def create_mcp_server(auth=None):
     mcp.tool()(suppliers.cin7_create_supplier)
     mcp.tool()(suppliers.cin7_update_supplier)
 
+    # -- Tools: customers ---------------------------------------------------
+    mcp.tool()(customers.cin7_customers)
+    mcp.tool()(customers.cin7_get_customer)
+    mcp.tool()(customers.cin7_create_customer)
+    mcp.tool()(customers.cin7_update_customer)
+
     # -- Tools: sales -------------------------------------------------------
     mcp.tool()(sales.cin7_sales)
     mcp.tool()(sales.cin7_get_sale)
@@ -71,6 +78,8 @@ def create_mcp_server(auth=None):
     mcp.tool()(stock.cin7_stock_adjustments)
     mcp.tool()(stock.cin7_get_stock_adjustment)
     mcp.tool()(stock.cin7_create_stock_adjustment)
+    mcp.tool()(stock.cin7_get_stock_transfer_order)
+    mcp.tool()(stock.cin7_save_stock_transfer_order)
 
     # -- Tools: product snapshots -------------------------------------------
     mcp.tool()(snapshots.cin7_products_snapshot_start)

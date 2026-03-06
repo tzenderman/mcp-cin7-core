@@ -363,6 +363,90 @@ class Cin7Client:
             f"Supplier update error: {response.status_code} {response.text[:200]}"
         )
 
+    async def list_customers(
+        self,
+        *,
+        page: int = 1,
+        limit: int = 100,
+        name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List customers with pagination and optional name filter."""
+        params: Dict[str, Any] = {"Page": page, "Limit": limit}
+        if name:
+            params["Name"] = name
+        response = await self._request("get", "customer", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+        if response.status_code == 200:
+            return data if isinstance(data, dict) else {"result": data}
+        raise Cin7ClientError(
+            f"Customer list error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def get_customer(
+        self,
+        *,
+        customer_id: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch a single customer by ID or Name."""
+        if not customer_id and not name:
+            raise Cin7ClientError("get_customer requires customer_id or name")
+
+        params: Dict[str, Any] = {}
+        if customer_id is not None:
+            params["ID"] = customer_id
+        if name is not None:
+            params["Name"] = name
+
+        response = await self._request("get", "customer", params=params)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            customers = data.get("CustomerList")
+            if isinstance(customers, list) and customers:
+                return customers[0]
+            raise Cin7ClientError("Customer not found")
+
+        raise Cin7ClientError(
+            f"Customer get error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def save_customer(self, customer: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new Customer via POST customer."""
+        response = await self._request("post", "customer", json=customer)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code in (200, 201):
+            return data if isinstance(data, dict) else {"result": data}
+
+        raise Cin7ClientError(
+            f"Customer save error: {response.status_code} {response.text[:500]}"
+        )
+
+    async def update_customer(self, customer: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a Customer via PUT customer."""
+        response = await self._request("put", "customer", json=customer)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code in (200, 204):
+            return data if isinstance(data, dict) else {"result": data}
+
+        raise Cin7ClientError(
+            f"Customer update error: {response.status_code} {response.text[:500]}"
+        )
+
     async def list_sales(
         self,
         *,
@@ -710,6 +794,55 @@ class Cin7Client:
             return data if isinstance(data, dict) else {"result": data}
         raise Cin7ClientError(
             f"Stock Transfer list error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def get_stock_transfer_order(
+        self,
+        *,
+        task_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch a stock transfer order by TaskID via GET /stockTransferOrder."""
+        if not task_id:
+            raise Cin7ClientError("get_stock_transfer_order requires task_id")
+
+        response = await self._request("get", "stockTransferOrder", params={"TaskID": task_id})
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code == 200 and isinstance(data, dict):
+            return data
+
+        if response.status_code == 400:
+            if isinstance(data, list) and data:
+                msg = data[0].get("Exception", "")
+                if "not found" in msg.lower():
+                    raise Cin7ClientError(f"Stock Transfer Order not found: {task_id}")
+            raise Cin7ClientError(
+                f"Stock Transfer Order get error: {response.status_code} {response.text[:200]}"
+            )
+
+        raise Cin7ClientError(
+            f"Stock Transfer Order get error: {response.status_code} {response.text[:200]}"
+        )
+
+    async def save_stock_transfer_order(self, stock_transfer_order: Dict[str, Any]) -> Dict[str, Any]:
+        """Create or update a stock transfer order via POST /stockTransferOrder.
+
+        POST handles both create (no TaskID) and update (include TaskID). No PUT endpoint exists.
+        """
+        response = await self._request("post", "stockTransferOrder", json=stock_transfer_order)
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw": _truncate(response.text or "")}
+
+        if response.status_code in (200, 201):
+            return data if isinstance(data, dict) else {"result": data}
+
+        raise Cin7ClientError(
+            f"Stock Transfer Order save error: {response.status_code} {response.text[:500]}"
         )
 
     async def list_stock_adjustments(

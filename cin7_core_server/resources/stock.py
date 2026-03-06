@@ -287,3 +287,46 @@ async def cin7_create_stock_adjustment(payload: Dict[str, Any]) -> Dict[str, Any
     result = await client.create_stock_adjustment(payload)
     logger.debug("Tool result: cin7_create_stock_adjustment -> %s", truncate(str(result)))
     return result
+
+
+async def cin7_get_stock_transfer_order(
+    task_id: str,
+    fields: list[str] | None = None,
+) -> Dict[str, Any]:
+    """Get a stock transfer order by TaskID.
+
+    Parameters:
+    - task_id: Stock transfer order task ID (required)
+    - fields: Additional fields to include beyond defaults, or ["*"] for all fields
+
+    Available fields: TaskID, FromLocation, ToLocation, Status, TransferDate, Lines
+        Default returns: TaskID, FromLocation, ToLocation
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer-order/get
+    """
+    logger.debug("Tool call: cin7_get_stock_transfer_order(task_id=%s)", task_id)
+    client = Cin7Client.from_env()
+    result = await client.get_stock_transfer_order(task_id=task_id)
+
+    result = project_dict(result, fields, base_fields={"TaskID", "FromLocation", "ToLocation"})
+
+    logger.debug("Tool result: cin7_get_stock_transfer_order -> %s", truncate(str(result)))
+    return result
+
+
+async def cin7_save_stock_transfer_order(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Create or update a stock transfer order via POST /stockTransferOrder.
+
+    POST handles both create (no TaskID) and update (include TaskID). No PUT endpoint exists.
+
+    Required: FromLocation, ToLocation, Lines[].SKU or ProductID + TransferQuantity
+
+    Docs: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer-order/post
+    """
+    logger.debug(
+        "Tool call: cin7_save_stock_transfer_order(payload=%s)", truncate(str(payload))
+    )
+    client = Cin7Client.from_env()
+    result = await client.save_stock_transfer_order(payload)
+    logger.debug("Tool result: cin7_save_stock_transfer_order -> %s", truncate(str(result)))
+    return result
