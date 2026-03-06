@@ -63,6 +63,11 @@ from tests.fixtures.customers import (
     CUSTOMER_SAVE_RESPONSE,
     CUSTOMER_UPDATE_RESPONSE,
 )
+from tests.fixtures.stock_transfer_orders import (
+    STO_SINGLE,
+    STO_CREATE_RESPONSE,
+    STO_NOT_FOUND_400,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -955,6 +960,99 @@ class TestGetStockTransfer:
 
         with pytest.raises(Cin7ClientError, match="Stock Transfer get error"):
             await mock_client.get_stock_transfer(stock_transfer_id="st-task-001")
+
+
+# ---------------------------------------------------------------------------
+# TestGetStockTransferOrder
+# ---------------------------------------------------------------------------
+
+
+class TestGetStockTransferOrder:
+    """Tests for get_stock_transfer_order method."""
+
+    async def test_success_returns_order(self, mock_client):
+        """Should return the stock transfer order object on success."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = STO_SINGLE
+        mock_resp.text = str(STO_SINGLE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.get_stock_transfer_order(task_id="sto-task-001")
+
+        assert result["TaskID"] == "sto-task-001"
+        assert result["FromLocation"] == "Main Warehouse"
+
+    async def test_400_not_found_raises(self, mock_client):
+        """Should raise 'Stock Transfer Order not found' on 400 with 'not found' exception."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.json.return_value = STO_NOT_FOUND_400
+        mock_resp.text = str(STO_NOT_FOUND_400)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Stock Transfer Order not found"):
+            await mock_client.get_stock_transfer_order(task_id="sto-nonexistent")
+
+    async def test_no_id_raises(self, mock_client):
+        """Should raise Cin7ClientError when task_id is not provided."""
+        with pytest.raises(Cin7ClientError, match="requires task_id"):
+            await mock_client.get_stock_transfer_order()
+
+    async def test_500_raises(self, mock_client):
+        """Should raise Cin7ClientError on server error."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.json.return_value = {"error": "Server Error"}
+        mock_resp.text = "Server Error"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Stock Transfer Order get error"):
+            await mock_client.get_stock_transfer_order(task_id="sto-task-001")
+
+
+# ---------------------------------------------------------------------------
+# TestSaveStockTransferOrder
+# ---------------------------------------------------------------------------
+
+
+class TestSaveStockTransferOrder:
+    """Tests for save_stock_transfer_order method."""
+
+    async def test_201_returns_order(self, mock_client):
+        """Should return order data on 201 Created."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 201
+        mock_resp.json.return_value = STO_CREATE_RESPONSE
+        mock_resp.text = str(STO_CREATE_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.save_stock_transfer_order({"FromLocation": "A", "ToLocation": "B"})
+
+        assert result["TaskID"] == "sto-new-789"
+
+    async def test_200_returns_order(self, mock_client):
+        """Should return order data on 200 OK."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = STO_CREATE_RESPONSE
+        mock_resp.text = str(STO_CREATE_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.save_stock_transfer_order({"FromLocation": "A", "ToLocation": "B"})
+
+        assert result["TaskID"] == "sto-new-789"
+
+    async def test_error_raises(self, mock_client):
+        """Should raise Cin7ClientError on error response."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.json.return_value = {"error": "Bad Request"}
+        mock_resp.text = "Bad Request"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Stock Transfer Order save error"):
+            await mock_client.save_stock_transfer_order({"FromLocation": "A"})
 
 
 # ---------------------------------------------------------------------------
@@ -2232,6 +2330,220 @@ class TestUpdatePurchaseOrder:
 
 
 # ---------------------------------------------------------------------------
+# TestListCustomers
+# ---------------------------------------------------------------------------
+
+
+class TestListCustomers:
+    """Tests for list_customers method."""
+
+    async def test_success_returns_customer_list(self, mock_client):
+        """Should return CustomerList on success."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = CUSTOMER_LIST_RESPONSE
+        mock_resp.text = str(CUSTOMER_LIST_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.list_customers()
+
+        assert "CustomerList" in result
+        assert len(result["CustomerList"]) == 2
+        assert result["Total"] == 2
+
+    async def test_name_filter_sent_as_param(self, mock_client):
+        """Should pass Name param when name filter provided."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = CUSTOMER_LIST_RESPONSE
+        mock_resp.text = str(CUSTOMER_LIST_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        await mock_client.list_customers(name="Acme")
+
+        call_args = mock_client._request.call_args
+        params = call_args.kwargs.get("params", call_args[1].get("params", {}))
+        assert params["Name"] == "Acme"
+
+    async def test_no_name_omits_param(self, mock_client):
+        """Should NOT send Name param when no filter provided."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = CUSTOMER_LIST_RESPONSE
+        mock_resp.text = str(CUSTOMER_LIST_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        await mock_client.list_customers()
+
+        call_args = mock_client._request.call_args
+        params = call_args.kwargs.get("params", call_args[1].get("params", {}))
+        assert "Name" not in params
+
+    async def test_api_error_raises(self, mock_client):
+        """Should raise Cin7ClientError on API error."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.json.return_value = {"error": "Server Error"}
+        mock_resp.text = "Server Error"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Customer list error"):
+            await mock_client.list_customers()
+
+
+# ---------------------------------------------------------------------------
+# TestGetCustomer
+# ---------------------------------------------------------------------------
+
+
+class TestGetCustomer:
+    """Tests for get_customer method."""
+
+    async def test_by_id_returns_first_customer(self, mock_client):
+        """Should return first customer from CustomerList when queried by ID."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"CustomerList": [CUSTOMER_SINGLE], "Total": 1}
+        mock_resp.text = str({"CustomerList": [CUSTOMER_SINGLE]})
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.get_customer(customer_id="cust-abc-123")
+
+        assert result["ID"] == "cust-abc-123"
+        assert result["Name"] == "Acme Corp"
+
+    async def test_by_name_returns_first_customer(self, mock_client):
+        """Should return first customer from CustomerList when queried by name."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"CustomerList": [CUSTOMER_SINGLE], "Total": 1}
+        mock_resp.text = str({"CustomerList": [CUSTOMER_SINGLE]})
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.get_customer(name="Acme Corp")
+
+        assert result["Name"] == "Acme Corp"
+        call_args = mock_client._request.call_args
+        params = call_args.kwargs.get("params", call_args[1].get("params", {}))
+        assert params["Name"] == "Acme Corp"
+
+    async def test_no_params_raises(self, mock_client):
+        """Should raise Cin7ClientError when neither ID nor name provided."""
+        with pytest.raises(Cin7ClientError, match="get_customer requires"):
+            await mock_client.get_customer()
+
+    async def test_not_found_raises(self, mock_client):
+        """Should raise Cin7ClientError when CustomerList is empty."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"CustomerList": [], "Total": 0}
+        mock_resp.text = str({"CustomerList": []})
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Customer not found"):
+            await mock_client.get_customer(customer_id="nonexistent")
+
+    async def test_api_error_raises(self, mock_client):
+        """Should raise Cin7ClientError on non-200 response."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.json.return_value = {"error": "Server Error"}
+        mock_resp.text = "Server Error"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Customer get error"):
+            await mock_client.get_customer(customer_id="cust-abc-123")
+
+
+# ---------------------------------------------------------------------------
+# TestSaveCustomer
+# ---------------------------------------------------------------------------
+
+
+class TestSaveCustomer:
+    """Tests for save_customer method."""
+
+    async def test_201_returns_customer(self, mock_client):
+        """Should return customer data on 201 Created."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 201
+        mock_resp.json.return_value = CUSTOMER_SAVE_RESPONSE
+        mock_resp.text = str(CUSTOMER_SAVE_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.save_customer({"Name": "New Customer"})
+
+        assert result["ID"] == "cust-new-789"
+
+    async def test_200_returns_customer(self, mock_client):
+        """Should return customer data on 200 OK."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = CUSTOMER_SAVE_RESPONSE
+        mock_resp.text = str(CUSTOMER_SAVE_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.save_customer({"Name": "New Customer"})
+
+        assert result["ID"] == "cust-new-789"
+
+    async def test_error_raises(self, mock_client):
+        """Should raise Cin7ClientError on error response."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.json.return_value = {"error": "Bad Request"}
+        mock_resp.text = "Bad Request"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Customer save error"):
+            await mock_client.save_customer({"Name": "Bad"})
+
+
+# ---------------------------------------------------------------------------
+# TestUpdateCustomer
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateCustomer:
+    """Tests for update_customer method."""
+
+    async def test_200_returns_customer(self, mock_client):
+        """Should return customer data on 200 OK."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = CUSTOMER_UPDATE_RESPONSE
+        mock_resp.text = str(CUSTOMER_UPDATE_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.update_customer({"ID": "cust-abc-123", "Name": "Updated"})
+
+        assert result["Name"] == "Acme Corp Updated"
+
+    async def test_204_returns_customer(self, mock_client):
+        """Should return customer data on 204 No Content."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 204
+        mock_resp.json.return_value = CUSTOMER_UPDATE_RESPONSE
+        mock_resp.text = str(CUSTOMER_UPDATE_RESPONSE)
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        result = await mock_client.update_customer({"ID": "cust-abc-123", "Name": "Updated"})
+
+        assert result["Name"] == "Acme Corp Updated"
+
+    async def test_error_raises(self, mock_client):
+        """Should raise Cin7ClientError on error response."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.json.return_value = {"error": "Bad Request"}
+        mock_resp.text = "Bad Request"
+        mock_client._request = AsyncMock(return_value=mock_resp)
+
+        with pytest.raises(Cin7ClientError, match="Customer update error"):
+            await mock_client.update_customer({"ID": "cust-abc-123"})
+
+
+# ---------------------------------------------------------------------------
 # TestNetworkErrors
 # ---------------------------------------------------------------------------
 
@@ -2917,3 +3229,33 @@ class TestApiRequestContracts:
         call = mock_client._request.call_args
         assert call[0][0] == "put"
         assert call[0][1] == "customer"
+
+    # ---- Stock Transfer Order ----
+
+    async def test_get_stock_transfer_order_path_is_stocktransferorder_camelcase(self, mock_client):
+        """API docs: GET /stockTransferOrder?TaskID=... — camelCase path.
+
+        See: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer-order/get
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(STO_SINGLE))
+
+        await mock_client.get_stock_transfer_order(task_id="sto-task-001")
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "get"
+        assert call[0][1] == "stockTransferOrder"
+        params = call.kwargs.get("params", call[1].get("params", {}))
+        assert params["TaskID"] == "sto-task-001"
+
+    async def test_save_stock_transfer_order_path_is_stocktransferorder_post(self, mock_client):
+        """API docs: POST /stockTransferOrder — POST handles both create AND update (no PUT).
+
+        See: https://dearinventory.docs.apiary.io/#reference/stock/stock-transfer-order/post
+        """
+        mock_client._request = AsyncMock(return_value=self._ok_resp(STO_CREATE_RESPONSE))
+
+        await mock_client.save_stock_transfer_order({"FromLocation": "A", "ToLocation": "B"})
+
+        call = mock_client._request.call_args
+        assert call[0][0] == "post"
+        assert call[0][1] == "stockTransferOrder"
