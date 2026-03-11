@@ -259,6 +259,7 @@ Create endpoints have **contract tests** in `tests/test_mcp_server.py` that docu
 |---|---|
 | `cin7_create_product` | `SKU`, `Name`, `Category`, `Type`, `CostingMethod`, `UOM`, `Status` |
 | `cin7_create_supplier` | `Name`, `Currency`, `PaymentTerm`, `AccountPayable`, `TaxRule` |
+| `cin7_create_customer` | `Name`, `Status`, `Currency`, `PaymentTerm`, `AccountReceivable`, `RevenueAccount`, `TaxRule` |
 | `cin7_create_sale` | `Customer` (or `CustomerID`), `Location`, `Status`, `SkipQuote` |
 | `cin7_create_purchase_order` | `Approach` ("Invoice" or "Stock"), `Supplier` (or `SupplierID`), `Location`, `Status`, `OrderDate` |
 
@@ -275,7 +276,7 @@ Create endpoints have **contract tests** in `tests/test_mcp_server.py` that docu
 | `TaxRule` | String | Tax rule name |
 | `Total` | Decimal | `Price × Quantity − Discount + Tax` |
 
-**Note:** `Lines` are NOT required by the Cin7 API for creating a Sale or Purchase header. They are forwarded internally via a second API call (`POST /sale/order` or `POST /purchase/order`). The two-step process is tested in `test_cin7_client.py`.
+**Note:** `Lines` are NOT required by the Cin7 API for creating a Sale or Purchase header. They are forwarded internally via a second API call. For Sales, the path depends on `SkipQuote`: `POST /sale/quote` when `SkipQuote=False` (Quote stage), `POST /sale/order` when `SkipQuote=True` or absent (Order stage). Purchase Orders always use `POST /purchase/order`. The two-step process is tested in `test_cin7_client.py`.
 
 When adding a new create endpoint, add a contract test named `test_create_<resource>_api_contract` with:
 1. A docstring listing required fields and the API docs URL
@@ -380,6 +381,20 @@ Comprehensive logging throughout:
 - MCP server logs all tool/resource calls with truncated output
 
 ## Common Operations
+
+### Creating a customer
+
+1. Read template: `cin7://templates/customer` resource
+2. Fill required fields: `Name`, `Status`, `Currency`, `PaymentTerm`, `AccountReceivable`, `RevenueAccount`, `TaxRule`
+3. Add `Contacts` array (not the header-level `Contact` string) for contact details
+4. Add `Addresses` array with `Type` set to `"Billing"` or `"Shipping"`
+5. Create: `cin7_create_customer(payload)`
+
+### Updating a customer
+
+1. Read existing as template: `cin7://templates/customer/{id}` or `cin7://templates/customer/name/{name}`
+2. Modify fields in the returned template
+3. Update: `cin7_update_customer(payload)`
 
 ### Creating a product
 

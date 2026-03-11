@@ -84,7 +84,19 @@ async def cin7_get_customer(
 async def cin7_create_customer(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new Cin7 Core customer via POST customer.
 
-    Required fields: Name, Currency, PaymentTerm, AccountReceivable, TaxRule
+    Required fields: Name, Status, Currency, PaymentTerm, AccountReceivable,
+        RevenueAccount, TaxRule
+
+    Use cin7://templates/customer to get a blank template with all fields.
+
+    Key payload structure notes:
+    - Contact (string): header-level contact name
+    - Contacts (array): list of contact objects, each with:
+        Name, Phone, Email, Comment, Default (bool)
+    - Addresses (array): list of address objects, each with:
+        Line1, Line2, City, State, Postcode, Country, Type ("Billing"/"Shipping")
+    - Optional fields: Location, Carrier, SalesRepresentative, PriceTier,
+        Discount, CreditLimit, Comments
 
     Docs: https://dearinventory.docs.apiary.io/#reference/customer/customer/post
     """

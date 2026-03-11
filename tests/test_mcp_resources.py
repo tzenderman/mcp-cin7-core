@@ -7,6 +7,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock
 
+from tests.fixtures.customers import CUSTOMER_SINGLE
 from tests.fixtures.products import PRODUCT_SINGLE
 from tests.fixtures.suppliers import SUPPLIER_SINGLE
 from tests.fixtures.purchase_orders import PO_SINGLE
@@ -120,6 +121,129 @@ class TestProductBySku:
         assert data["Name"] == "Blue Widget"
         assert data["Category"] == "Widgets"
 
+
+
+# ----------------------------- Customer Template -----------------------------
+
+
+class TestCustomerTemplate:
+    """Tests for resource_customer_template()."""
+
+    @pytest.mark.asyncio
+    async def test_returns_valid_json_with_required_fields(self):
+        from cin7_core_server.resources.templates import resource_customer_template
+
+        result = await resource_customer_template()
+        template = json.loads(result)
+
+        for field in ("Name", "Status", "Currency", "PaymentTerm",
+                      "AccountReceivable", "RevenueAccount", "TaxRule"):
+            assert field in template, f"Missing required field: {field}"
+
+    @pytest.mark.asyncio
+    async def test_has_contacts_array(self):
+        from cin7_core_server.resources.templates import resource_customer_template
+
+        result = await resource_customer_template()
+        template = json.loads(result)
+
+        assert "Contacts" in template
+        assert isinstance(template["Contacts"], list)
+        assert len(template["Contacts"]) >= 1
+        contact = template["Contacts"][0]
+        for field in ("Name", "Phone", "Email", "Default"):
+            assert field in contact, f"Missing contact field: {field}"
+
+    @pytest.mark.asyncio
+    async def test_has_addresses_array(self):
+        from cin7_core_server.resources.templates import resource_customer_template
+
+        result = await resource_customer_template()
+        template = json.loads(result)
+
+        assert "Addresses" in template
+        assert isinstance(template["Addresses"], list)
+        assert len(template["Addresses"]) >= 1
+        address = template["Addresses"][0]
+        for field in ("Line1", "City", "State", "Country", "Type"):
+            assert field in address, f"Missing address field: {field}"
+
+    @pytest.mark.asyncio
+    async def test_contact_string_vs_contacts_array_both_present(self):
+        """Template distinguishes header-level Contact (string) from Contacts (array)."""
+        from cin7_core_server.resources.templates import resource_customer_template
+
+        result = await resource_customer_template()
+        template = json.loads(result)
+
+        assert isinstance(template["Contact"], str)
+        assert isinstance(template["Contacts"], list)
+
+
+# ----------------------------- Customer By ID -----------------------------
+
+
+class TestCustomerById:
+    """Tests for resource_customer_by_id()."""
+
+    @pytest.mark.asyncio
+    async def test_calls_get_customer_with_customer_id(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_customer = AsyncMock(return_value=CUSTOMER_SINGLE)
+
+        from cin7_core_server.resources.templates import resource_customer_by_id
+
+        result = await resource_customer_by_id("cust-abc-123")
+
+        assert isinstance(result, str)
+        mock_instance.get_customer.assert_called_once_with(customer_id="cust-abc-123")
+
+    @pytest.mark.asyncio
+    async def test_returned_json_matches_mock_data(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_customer = AsyncMock(return_value=CUSTOMER_SINGLE)
+
+        from cin7_core_server.resources.templates import resource_customer_by_id
+
+        result = await resource_customer_by_id("cust-abc-123")
+        data = json.loads(result)
+
+        assert data["Name"] == "Acme Corp"
+        assert data["ID"] == "cust-abc-123"
+        assert data["Currency"] == "USD"
+
+
+# ----------------------------- Customer By Name -----------------------------
+
+
+class TestCustomerByName:
+    """Tests for resource_customer_by_name()."""
+
+    @pytest.mark.asyncio
+    async def test_calls_get_customer_with_name(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_customer = AsyncMock(return_value=CUSTOMER_SINGLE)
+
+        from cin7_core_server.resources.templates import resource_customer_by_name
+
+        result = await resource_customer_by_name("Acme Corp")
+
+        assert isinstance(result, str)
+        mock_instance.get_customer.assert_called_once_with(name="Acme Corp")
+
+    @pytest.mark.asyncio
+    async def test_returned_json_matches_mock_data(self, mock_cin7_class):
+        mock_class, mock_instance = mock_cin7_class
+        mock_instance.get_customer = AsyncMock(return_value=CUSTOMER_SINGLE)
+
+        from cin7_core_server.resources.templates import resource_customer_by_name
+
+        result = await resource_customer_by_name("Acme Corp")
+        data = json.loads(result)
+
+        assert data["Name"] == "Acme Corp"
+        assert data["Email"] == "orders@acme.com"
+        assert data["PaymentTerm"] == "Net 30"
 
 
 # ----------------------------- Supplier Template -----------------------------

@@ -105,6 +105,71 @@ async def resource_supplier_by_name(name: str) -> str:
     return json.dumps(supplier, indent=2)
 
 
+# ----------------------------- Customer Templates -----------------------------
+
+async def resource_customer_template() -> str:
+    """Blank customer template with all available fields."""
+    template = {
+        "Name": "",
+        "Status": "Active",
+        "Currency": "",
+        "PaymentTerm": "",
+        "AccountReceivable": "",
+        "RevenueAccount": "",
+        "TaxRule": "",
+        "Location": "",
+        "PriceTier": "",
+        "Discount": 0.0,
+        "CreditLimit": 0.0,
+        "Carrier": "",
+        "SalesRepresentative": "",
+        "Contact": "",
+        "Phone": "",
+        "Email": "",
+        "Website": "",
+        "Comments": "",
+        "Contacts": [
+            {
+                "Name": "",
+                "Phone": "",
+                "Email": "",
+                "Comment": "",
+                "Default": True,
+            }
+        ],
+        "Addresses": [
+            {
+                "Line1": "",
+                "Line2": "",
+                "City": "",
+                "State": "",
+                "Postcode": "",
+                "Country": "",
+                "Type": "Billing",
+            }
+        ],
+    }
+    return json.dumps(template, indent=2)
+
+
+async def resource_customer_by_id(customer_id: str) -> str:
+    """Get existing customer as template for updates."""
+    logger.debug("Resource call: resource_customer_by_id(customer_id=%s)", customer_id)
+    client = Cin7Client.from_env()
+    customer = await client.get_customer(customer_id=customer_id)
+    logger.debug("Resource result: resource_customer_by_id -> %s", truncate(str(customer)))
+    return json.dumps(customer, indent=2)
+
+
+async def resource_customer_by_name(name: str) -> str:
+    """Get existing customer by name as template for updates."""
+    logger.debug("Resource call: resource_customer_by_name(name=%s)", name)
+    client = Cin7Client.from_env()
+    customer = await client.get_customer(name=name)
+    logger.debug("Resource result: resource_customer_by_name -> %s", truncate(str(customer)))
+    return json.dumps(customer, indent=2)
+
+
 # ----------------------------- Purchase Order Templates -----------------------------
 
 async def resource_purchase_order_template() -> str:

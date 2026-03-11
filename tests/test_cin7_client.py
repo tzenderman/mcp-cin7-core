@@ -1633,6 +1633,119 @@ class TestSaveSale:
         with pytest.raises(Cin7ClientError, match="No ID returned"):
             await mock_client.save_sale(payload)
 
+    async def test_skip_quote_false_posts_lines_to_sale_quote(self, mock_client):
+        """When SkipQuote is False, lines go to POST /sale/quote not /sale/order.
+
+        The Cin7 API creates a Quote when SkipQuote=False. Lines must be added
+        via POST /sale/quote. POST /sale/order fails because the sale hasn't
+        been advanced past the Quote stage yet.
+        """
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "sale-123"}'
+        header_response.json.return_value = {"ID": "sale-123", "Status": "DRAFT"}
+
+        quote_response = MagicMock()
+        quote_response.status_code = 200
+        quote_response.text = '{"SaleID": "sale-123", "Lines": [...]}'
+        quote_response.json.return_value = {
+            "SaleID": "sale-123",
+            "Lines": [{"ProductID": "prod-123", "SKU": "TEST", "Quantity": 1}],
+        }
+
+        mock_client._request = AsyncMock(side_effect=[header_response, quote_response])
+
+        payload = {
+            "Customer": "Test",
+            "Location": "MAIN",
+            "SkipQuote": False,
+            "Lines": [{"ProductID": "prod-123", "SKU": "TEST", "Quantity": 1, "Price": 10.0}],
+        }
+        result = await mock_client.save_sale(payload)
+
+        assert mock_client._request.call_count == 2
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][0] == "post"
+        assert second_call[0][1] == "sale/quote", \
+            "SkipQuote=False must POST lines to 'sale/quote', not 'sale/order'"
+        assert result.get("Quote") is not None
+
+    async def test_skip_quote_true_posts_lines_to_sale_order(self, mock_client):
+        """When SkipQuote is True, lines go to POST /sale/order (existing behavior)."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "sale-123"}'
+        header_response.json.return_value = {"ID": "sale-123", "Status": "DRAFT"}
+
+        order_response = MagicMock()
+        order_response.status_code = 200
+        order_response.text = '{"SaleID": "sale-123", "Lines": [...]}'
+        order_response.json.return_value = {
+            "SaleID": "sale-123",
+            "Lines": [{"ProductID": "prod-123", "SKU": "TEST", "Quantity": 1}],
+        }
+
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
+
+        payload = {
+            "Customer": "Test",
+            "Location": "MAIN",
+            "SkipQuote": True,
+            "Lines": [{"ProductID": "prod-123", "SKU": "TEST", "Quantity": 1, "Price": 10.0}],
+        }
+        result = await mock_client.save_sale(payload)
+
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][1] == "sale/order"
+        assert result.get("Order") is not None
+
+    async def test_skip_quote_absent_defaults_to_sale_order(self, mock_client):
+        """When SkipQuote is not in the payload, lines go to POST /sale/order (backwards compat)."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "sale-123"}'
+        header_response.json.return_value = {"ID": "sale-123"}
+
+        order_response = MagicMock()
+        order_response.status_code = 200
+        order_response.text = '{"SaleID": "sale-123"}'
+        order_response.json.return_value = {"SaleID": "sale-123", "Lines": []}
+
+        mock_client._request = AsyncMock(side_effect=[header_response, order_response])
+
+        payload = {
+            "Customer": "Test",
+            "Location": "MAIN",
+            "Lines": [{"ProductID": "prod-123", "SKU": "TEST", "Quantity": 1}],
+        }
+        await mock_client.save_sale(payload)
+
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][1] == "sale/order"
+
+    async def test_skip_quote_false_quote_lines_error_mentions_orphaned_sale(self, mock_client):
+        """When SkipQuote=False and quote lines fail, error message references orphaned SaleID."""
+        header_response = MagicMock()
+        header_response.status_code = 200
+        header_response.text = '{"ID": "sale-456"}'
+        header_response.json.return_value = {"ID": "sale-456"}
+
+        quote_response = MagicMock()
+        quote_response.status_code = 400
+        quote_response.text = "Bad Request: Invalid product"
+        quote_response.json.return_value = {"error": "Invalid product"}
+
+        mock_client._request = AsyncMock(side_effect=[header_response, quote_response])
+
+        payload = {
+            "Customer": "Test",
+            "Location": "MAIN",
+            "SkipQuote": False,
+            "Lines": [{"ProductID": "invalid"}],
+        }
+        with pytest.raises(Cin7ClientError, match="orphaned SaleID=sale-456"):
+            await mock_client.save_sale(payload)
+
 
 # ---------------------------------------------------------------------------
 # TestUpdateSale (preserved from existing tests)
@@ -3043,6 +3156,32 @@ class TestApiRequestContracts:
         second_call = mock_client._request.call_args_list[1]
         assert second_call[0][0] == "put"
         assert second_call[0][1] == "sale/order", "API path is 'sale/order' (lowercase)"
+
+    # ---- Save Sale Quote Lines ----
+
+    async def test_save_sale_skip_quote_false_uses_post_sale_quote(self, mock_client):
+        """API docs: POST /sale/quote — path is 'sale/quote' (lowercase), method is 'post'.
+
+        When SkipQuote=False, the sale is created at the Quote stage, so lines
+        must go to POST /sale/quote (not /sale/order).
+
+        See: https://dearinventory.docs.apiary.io/#reference/sale/sale-quote/post
+        """
+        header_resp = self._ok_resp({"ID": "sale-123"})
+        quote_resp = self._ok_resp({"SaleID": "sale-123", "Lines": []})
+        mock_client._request = AsyncMock(side_effect=[header_resp, quote_resp])
+
+        await mock_client.save_sale({
+            "Customer": "Test",
+            "Location": "MAIN",
+            "SkipQuote": False,
+            "Lines": [{"ProductID": "p", "SKU": "X", "Quantity": 1}],
+        })
+
+        second_call = mock_client._request.call_args_list[1]
+        assert second_call[0][0] == "post"
+        assert second_call[0][1] == "sale/quote", \
+            "SkipQuote=False: API path must be 'sale/quote', not 'sale/order'"
 
     # ---- Update Purchase Order with Lines ----
 

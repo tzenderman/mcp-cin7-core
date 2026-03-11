@@ -532,33 +532,42 @@ class Cin7Client:
         if not sale_id:
             raise Cin7ClientError("No ID returned from Sale creation")
 
-        # STEP 2: Add order lines (if we have any)
+        # STEP 2: Add lines (if we have any)
+        # When SkipQuote is False the sale starts at the Quote stage, so lines
+        # must go to POST /sale/quote.  Otherwise (SkipQuote=True or absent)
+        # lines go to POST /sale/order (the original behaviour).
         if lines:
-            order_payload: Dict[str, Any] = {
+            skip_quote = payload.get("SkipQuote")
+            is_quote = skip_quote is False  # explicitly False, not absent/None
+            lines_path = "sale/quote" if is_quote else "sale/order"
+            result_key = "Quote" if is_quote else "Order"
+
+            lines_payload: Dict[str, Any] = {
                 "SaleID": sale_id,
                 "Lines": lines,
             }
             if "Status" in payload:
-                order_payload["Status"] = payload["Status"]
+                lines_payload["Status"] = payload["Status"]
             if additional_charges:
-                order_payload["AdditionalCharges"] = additional_charges
+                lines_payload["AdditionalCharges"] = additional_charges
             if order_memo:
-                order_payload["Memo"] = order_memo
+                lines_payload["Memo"] = order_memo
 
-            order_response = await self._request("post", "sale/order", json=order_payload)
+            lines_response = await self._request("post", lines_path, json=lines_payload)
             try:
-                order_data = order_response.json()
+                lines_data = lines_response.json()
             except Exception:
-                order_data = {"raw": _truncate(order_response.text or "")}
+                lines_data = {"raw": _truncate(lines_response.text or "")}
 
-            if order_response.status_code not in (200, 201):
+            if lines_response.status_code not in (200, 201):
+                stage = "quote" if is_quote else "order"
                 raise Cin7ClientError(
-                    f"Sale order lines creation error (orphaned SaleID={sale_id}): "
-                    f"{order_response.status_code} {order_response.text[:500]}"
+                    f"Sale {stage} lines creation error (orphaned SaleID={sale_id}): "
+                    f"{lines_response.status_code} {lines_response.text[:500]}"
                 )
 
-            if isinstance(order_data, dict):
-                data["Order"] = order_data
+            if isinstance(lines_data, dict):
+                data[result_key] = lines_data
             return data
 
         return data if isinstance(data, dict) else {"result": data}

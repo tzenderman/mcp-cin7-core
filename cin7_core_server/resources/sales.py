@@ -132,7 +132,9 @@ async def cin7_create_sale(payload: Dict[str, Any]) -> Dict[str, Any]:
     - Customer or CustomerID (customer name or UUID)
     - Location (warehouse/sales location name)
     - Status (sale status: "DRAFT" or "AUTHORISED")
-    - SkipQuote (boolean: true = go directly to Order stage, false = create Quote first)
+    - SkipQuote (boolean — controls which stage the sale starts at):
+        - true  → skip Quote, go directly to Order stage. Lines go to POST /sale/order.
+        - false → create a Quote first. Lines go to POST /sale/quote.
 
     Required fields for each line item (if including Lines):
     - ProductID (GUID — retrieve with cin7_get_product)
@@ -145,7 +147,7 @@ async def cin7_create_sale(payload: Dict[str, Any]) -> Dict[str, Any]:
     - Total (line total: (Price x Quantity) - Discount + Tax)
 
     Optional but commonly used fields:
-    - Lines (array of line items — forwarded internally to POST /sale/order)
+    - Lines (array of line items — routed to /sale/quote or /sale/order based on SkipQuote)
     - BillingAddress, ShippingAddress
     - TaxRule (sale-level default tax rule)
     - Terms (payment terms, e.g. "30 days")
@@ -156,8 +158,9 @@ async def cin7_create_sale(payload: Dict[str, Any]) -> Dict[str, Any]:
     1. Always read cin7://templates/sale first to get the complete structure
     2. Get product info with cin7_get_product to retrieve ProductID, SKU, Name
     3. Fill in all required fields listed above
-    4. Calculate Total for each line: (Price x Quantity) - Discount + Tax
-    5. Submit with cin7_create_sale()
+    4. Set SkipQuote: true for an Order, false for a Quote
+    5. Calculate Total for each line: (Price x Quantity) - Discount + Tax
+    6. Submit with cin7_create_sale()
 
     Docs: https://dearinventory.docs.apiary.io/#reference/sale/sale/post
     """
