@@ -198,13 +198,16 @@ class TestInterceptorPreSignup:
         assert data["decision"] == "ALLOW"
 
     def test_rejects_invalid_json(self, client):
-        """Should return 500 for invalid JSON payload (fail closed)."""
+        """Should return 200 with DENY for invalid JSON payload (fail closed).
+
+        ScaleKit docs require always returning HTTP 200 with decision in body.
+        """
         response = client.post(
             "/auth/interceptors/pre-signup",
             content="not json",
             headers={"Content-Type": "application/json"}
         )
-        assert response.status_code == 500
+        assert response.status_code == 200
         data = response.json()
         assert data["decision"] == "DENY"
 
@@ -277,7 +280,9 @@ class TestInterceptorSignatureVerification:
                     "interceptor-timestamp": "1234567890",
                 }
             )
-            assert response.status_code == 401
+            assert response.status_code == 200
+            data = response.json()
+            assert data["decision"] == "DENY"
             mock_client.verify_interceptor_payload.assert_called_once()
 
     def test_accepts_valid_signature_when_secret_configured(self):

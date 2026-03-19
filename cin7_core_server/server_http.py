@@ -128,14 +128,16 @@ async def handle_pre_signup(request: Request) -> JSONResponse:
         if not verify_interceptor_signature(request, body):
             return JSONResponse(
                 {"decision": "DENY", "error": {"message": "Invalid request signature"}},
-                status_code=401,
             )
 
         # Parse JSON body
         data = json.loads(body)
 
-        # Extract email from interceptor context
-        user_email = data.get("interceptor_context", {}).get("user_email", "")
+        # Extract email from interceptor context (two possible locations per ScaleKit docs)
+        user_email = (
+            data.get("interceptor_context", {}).get("user_email", "")
+            or data.get("data", {}).get("user", {}).get("email", "")
+        )
         trigger_point = data.get("trigger_point", "")
 
         logger.info(f"[INTERCEPTOR] {trigger_point} for email: {user_email}")
@@ -155,7 +157,6 @@ async def handle_pre_signup(request: Request) -> JSONResponse:
         # Fail closed - deny on error
         return JSONResponse(
             {"decision": "DENY", "error": {"message": "Internal error processing signup"}},
-            status_code=500,
         )
 
 
@@ -179,14 +180,16 @@ async def handle_pre_session_creation(request: Request) -> JSONResponse:
             logger.warning("[INTERCEPTOR] Signature verification failed")
             return JSONResponse(
                 {"decision": "DENY", "error": {"message": "Invalid request signature"}},
-                status_code=401,
             )
 
         # Parse JSON body
         data = json.loads(body)
 
-        # Extract email from interceptor context
-        user_email = data.get("interceptor_context", {}).get("user_email", "")
+        # Extract email from interceptor context (two possible locations per ScaleKit docs)
+        user_email = (
+            data.get("interceptor_context", {}).get("user_email", "")
+            or data.get("data", {}).get("user", {}).get("email", "")
+        )
         trigger_point = data.get("trigger_point", "")
 
         logger.info(f"[INTERCEPTOR] {trigger_point} for email: {user_email}")
@@ -208,10 +211,9 @@ async def handle_pre_session_creation(request: Request) -> JSONResponse:
 
     except Exception as e:
         logger.error(f"[INTERCEPTOR] Error processing PRE_SESSION_CREATION: {e}", exc_info=True)
-        # Fail closed - deny on error
+        # Fail closed - deny on error (always HTTP 200 per ScaleKit docs, decision in body)
         return JSONResponse(
             {"decision": "DENY", "error": {"message": f"Internal error processing session: {str(e)}"}},
-            status_code=500,
         )
 
 
