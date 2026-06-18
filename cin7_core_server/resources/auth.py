@@ -6,6 +6,7 @@ import logging
 from typing import Any, Dict
 
 from ..cin7_client import Cin7Client
+from ..utils.fields import FieldList
 from ..utils.logging import truncate
 from ..utils.projection import project_dict
 
@@ -21,7 +22,7 @@ async def cin7_status() -> Dict[str, Any]:
     return result
 
 
-async def cin7_me(fields: list[str] | None = None) -> Dict[str, Any]:
+async def cin7_me(fields: FieldList = None) -> Dict[str, Any]:
     """Call Cin7 Core Me endpoint to verify identity and account context.
 
     Parameters:

@@ -6,6 +6,7 @@ import logging
 from typing import Any, Dict
 
 from ..cin7_client import Cin7Client
+from ..utils.fields import FieldList
 from ..utils.logging import truncate
 from ..utils.projection import project_dict, project_items
 
@@ -17,7 +18,7 @@ async def cin7_products(
     cursor: str | None = None,
     name: str | None = None,
     sku: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """List products with pagination and optional name/SKU filters.
 
@@ -63,7 +64,7 @@ async def cin7_products(
 async def cin7_get_product(
     product_id: str | None = None,
     sku: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Get a single product by ID or SKU.
 

@@ -6,6 +6,7 @@ import logging
 from typing import Any, Dict
 
 from ..cin7_client import Cin7Client
+from ..utils.fields import FieldList
 from ..utils.logging import truncate
 from ..utils.projection import project_dict, project_items
 
@@ -16,7 +17,7 @@ async def cin7_customers(
     limit: int = 100,
     cursor: str | None = None,
     search: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """List customers with pagination and optional name filter.
 
@@ -56,7 +57,7 @@ async def cin7_customers(
 async def cin7_get_customer(
     customer_id: str | None = None,
     name: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Get a single customer by ID or name.
 

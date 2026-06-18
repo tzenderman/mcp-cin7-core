@@ -2653,3 +2653,122 @@ class TestCin7SaveStockTransferOrder:
         await cin7_save_stock_transfer_order(payload)
 
         mock_instance.save_stock_transfer_order.assert_called_once_with(payload)
+
+
+# ---------------------------------------------------------------------------
+# TestFieldsStringCoercion — MCP tools accept string-encoded fields
+# ---------------------------------------------------------------------------
+
+
+class TestFieldsStringCoercion:
+    """Verify MCP tools accept fields as JSON-encoded strings via FastMCP dispatch.
+
+    MCP clients may serialize list[str] as a JSON string (e.g.
+    '["PriceTier1"]') when the JSON Schema lacks type: array.
+    The FieldList type coerces these to list[str] at runtime.
+
+    These tests go through FastMCP._call_tool_mcp() to exercise the
+    pydantic validation path that real MCP clients hit.
+    """
+
+    @pytest.fixture
+    def mcp_server(self, mock_cin7_class):
+        """Create a FastMCP server with Cin7Client mocked across all resource modules."""
+        from cin7_core_server.server import create_mcp_server
+        return create_mcp_server()
+
+    @staticmethod
+    def _extract_result(call_result):
+        """Extract the dict payload from FastMCP _call_tool_mcp return value."""
+        import json
+        _content_blocks, raw = call_result
+        return raw
+
+    @pytest.mark.asyncio
+    async def test_cin7_products_accepts_json_string_fields(self, mock_cin7_class, mcp_server):
+        """fields='["PriceTier1", "Category"]' should work like fields=["PriceTier1", "Category"]."""
+        _, mock_instance = mock_cin7_class
+        mock_instance.list_products = AsyncMock(return_value=copy.deepcopy(PRODUCT_LIST_RESPONSE))
+
+        raw = self._extract_result(
+            await mcp_server._call_tool_mcp("cin7_products", {"fields": '["PriceTier1", "Category"]'})
+        )
+
+        for product in raw["results"]:
+            assert "SKU" in product
+            assert "Name" in product
+            # Brand NOT requested — should be excluded
+            assert "Brand" not in product
+
+    @pytest.mark.asyncio
+    async def test_cin7_get_product_accepts_bare_string_field(self, mock_cin7_class, mcp_server):
+        """fields='PriceTier1' (bare string) should work like fields=["PriceTier1"]."""
+        _, mock_instance = mock_cin7_class
+        mock_instance.get_product = AsyncMock(return_value=copy.deepcopy(PRODUCT_SINGLE))
+
+        raw = self._extract_result(
+            await mcp_server._call_tool_mcp("cin7_get_product", {"product_id": "prod-abc-123", "fields": "PriceTier1"})
+        )
+
+        assert "ID" in raw
+        assert "SKU" in raw
+        assert "Name" in raw
+        assert "Brand" not in raw
+
+    @pytest.mark.asyncio
+    async def test_cin7_products_accepts_comma_separated_fields(self, mock_cin7_class, mcp_server):
+        """fields='PriceTier1,Category' (comma-separated) should parse to list."""
+        _, mock_instance = mock_cin7_class
+        mock_instance.list_products = AsyncMock(return_value=copy.deepcopy(PRODUCT_LIST_RESPONSE))
+
+        raw = self._extract_result(
+            await mcp_server._call_tool_mcp("cin7_products", {"fields": "PriceTier1,Category"})
+        )
+
+        for product in raw["results"]:
+            assert "SKU" in product
+            assert "Name" in product
+            assert "Brand" not in product
+
+    @pytest.mark.asyncio
+    async def test_cin7_get_product_accepts_wildcard_string(self, mock_cin7_class, mcp_server):
+        """fields='["*"]' (JSON-encoded wildcard) should return all fields."""
+        _, mock_instance = mock_cin7_class
+        mock_instance.get_product = AsyncMock(return_value=copy.deepcopy(PRODUCT_SINGLE))
+
+        raw = self._extract_result(
+            await mcp_server._call_tool_mcp("cin7_get_product", {"product_id": "prod-abc-123", "fields": '["*"]'})
+        )
+
+        # Wildcard should return all fields
+        assert "Brand" in raw
+        assert "Category" in raw
+
+    @pytest.mark.asyncio
+    async def test_cin7_stock_levels_accepts_json_string_fields(self, mock_cin7_class, mcp_server):
+        """Stock tools also accept string-encoded fields."""
+        _, mock_instance = mock_cin7_class
+        mock_instance.list_product_availability = AsyncMock(
+            return_value={
+                "ProductAvailabilityList": [
+                    {
+                        "SKU": "TEST-001",
+                        "Location": "Main",
+                        "OnHand": 10,
+                        "Available": 8,
+                        "Allocated": 2,
+                        "Bin": "A1",
+                    }
+                ],
+                "Total": 1,
+            }
+        )
+
+        raw = self._extract_result(
+            await mcp_server._call_tool_mcp("cin7_stock_levels", {"fields": '["Allocated", "Bin"]'})
+        )
+
+        item = raw["results"][0]
+        assert "SKU" in item
+        assert "Allocated" in item
+        assert "Bin" in item

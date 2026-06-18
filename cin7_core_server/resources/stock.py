@@ -6,6 +6,7 @@ import logging
 from typing import Any, Dict
 
 from ..cin7_client import Cin7Client
+from ..utils.fields import FieldList
 from ..utils.logging import truncate
 from ..utils.projection import project_dict, project_items, project_stock_items
 
@@ -16,7 +17,7 @@ async def cin7_stock_levels(
     limit: int = 100,
     cursor: str | None = None,
     location: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """List stock levels across all products and locations.
 
@@ -65,7 +66,7 @@ async def cin7_stock_levels(
 async def cin7_get_stock(
     sku: str | None = None,
     product_id: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Get stock levels for a single product across all locations.
 
@@ -114,7 +115,7 @@ async def cin7_stock_transfers(
     limit: int = 100,
     cursor: str | None = None,
     search: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """List stock transfers with pagination and optional search filter.
 
@@ -162,7 +163,7 @@ async def cin7_stock_transfers(
 
 async def cin7_get_stock_transfer(
     stock_transfer_id: str,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Get a single stock transfer by ID.
 
@@ -197,7 +198,7 @@ async def cin7_stock_adjustments(
     status: str | None = None,
     limit: int = 100,
     cursor: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """List stock adjustments with optional status filter.
 
@@ -291,7 +292,7 @@ async def cin7_create_stock_adjustment(payload: Dict[str, Any]) -> Dict[str, Any
 
 async def cin7_get_stock_transfer_order(
     task_id: str,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Get a stock transfer order by TaskID.
 

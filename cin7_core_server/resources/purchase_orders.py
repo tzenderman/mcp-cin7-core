@@ -6,6 +6,7 @@ import logging
 from typing import Any, Dict
 
 from ..cin7_client import Cin7Client
+from ..utils.fields import FieldList
 from ..utils.logging import truncate
 from ..utils.projection import project_dict, project_items
 
@@ -16,7 +17,7 @@ async def cin7_purchase_orders(
     limit: int = 100,
     cursor: str | None = None,
     search: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """List purchase orders with pagination and optional search filter.
 
@@ -65,7 +66,7 @@ async def cin7_purchase_orders(
 
 async def cin7_get_purchase_order(
     purchase_order_id: str,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Get a single purchase order by ID.
 

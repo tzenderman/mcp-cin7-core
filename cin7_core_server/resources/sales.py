@@ -6,6 +6,7 @@ import logging
 from typing import Any, Dict
 
 from ..cin7_client import Cin7Client
+from ..utils.fields import FieldList
 from ..utils.logging import truncate
 from ..utils.projection import project_dict, project_items
 
@@ -16,7 +17,7 @@ async def cin7_sales(
     limit: int = 100,
     cursor: str | None = None,
     search: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """List sales with pagination and optional search filter.
 
@@ -73,7 +74,7 @@ async def cin7_get_sale(
     combine_additional_charges: bool = False,
     hide_inventory_movements: bool = False,
     include_transactions: bool = False,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Get a single sale by ID with full details including line items.
 

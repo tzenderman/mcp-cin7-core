@@ -62,6 +62,17 @@ If `ALLOWED_EMAILS` is empty or not set, all authenticated users are allowed.
 
 ## Testing
 
+### TDD Required
+
+Always write failing tests before implementing any fix or feature. The workflow is:
+
+1. **Write tests first** that describe the expected behavior (they should fail)
+2. **Verify the tests fail** for the expected reason
+3. **Implement** the minimum code to make them pass
+4. **Run the full suite** (`uv run pytest --tb=short`) to confirm no regressions
+
+This applies to bug fixes, new features, and refactors — not just new API endpoints.
+
 ### Running Tests
 
 ```bash

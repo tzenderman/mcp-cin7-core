@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from ..cin7_client import Cin7Client
+from ..utils.fields import FieldList
 from ..utils.logging import truncate
 from ..utils.projection import project_items, project_stock_items
 
@@ -176,7 +177,7 @@ async def cin7_products_snapshot_start(
     limit: int = 100,
     name: str | None = None,
     sku: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Start a server-side snapshot build of products.
 
@@ -269,7 +270,7 @@ async def cin7_stock_snapshot_start(
     page: int = 1,
     limit: int = 1000,
     location: str | None = None,
-    fields: list[str] | None = None,
+    fields: FieldList = None,
 ) -> Dict[str, Any]:
     """Start a server-side snapshot build of stock availability.
 
